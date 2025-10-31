@@ -1,0 +1,14 @@
+<form (ngSubmit)="submit()" #f="ngForm">
+  <h2>Login</h2>
+  <div>
+    <label>Username</label>
+    <input name="username" [(ngModel)]="username" required />
+  </div>
+  <div>
+    <label>Password</label>
+    <input name="password" type="password" [(ngModel)]="password" required />
+  </div>
+  <div *ngIf="error" style="color:red">{{error}}</div>
+  <button type="submit" [disabled]="loading || !f.form.valid">{{ loading ? 'Loading...' : 'Login' }}</button>
+  <a routerLink="/register">Create account</a>
+</form>

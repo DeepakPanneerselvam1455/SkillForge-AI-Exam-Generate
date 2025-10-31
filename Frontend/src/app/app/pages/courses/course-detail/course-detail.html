@@ -1,0 +1,15 @@
+<div>
+  <h2>{{ id === 'new' ? 'Create Course' : 'Edit Course' }}</h2>
+  <div *ngIf="loading">Loading...</div>
+  <form (ngSubmit)="save()" *ngIf="!loading">
+    <div>
+      <label>Title</label>
+      <input name="title" [(ngModel)]="model.title" required />
+    </div>
+    <div>
+      <label>Description</label>
+      <textarea name="description" [(ngModel)]="model.description"></textarea>
+    </div>
+    <button type="submit">Save</button>
+  </form>
+</div>

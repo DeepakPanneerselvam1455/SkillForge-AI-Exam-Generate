@@ -1,0 +1,12 @@
+<div>
+  <h2>AI Assistant</h2>
+  <textarea [(ngModel)]="prompt" rows="5" placeholder="Enter your prompt..."></textarea>
+  <div>
+    <button (click)="generate()" [disabled]="loading || !prompt">{{ loading ? 'Generating...' : 'Generate' }}</button>
+  </div>
+  <div *ngIf="error" style="color:red">{{error}}</div>
+  <div *ngIf="response">
+    <h3>Response</h3>
+    <pre>{{ response | json }}</pre>
+  </div>
+</div>
