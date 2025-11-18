@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+// Fix: Update import for react-router-dom v6 to resolve module export error.
 import { Link } from 'react-router-dom';
 import * as api from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -31,9 +32,10 @@ const StudentDashboard: React.FC = () => {
 
             try {
                 // Dashboard data
-                const [attempts, studentQuizzes] = await Promise.all([
+                const [attempts, studentQuizzes, allCourses] = await Promise.all([
                     api.getStudentProgress(user.id),
-                    api.getAssignedQuizzesForStudent(user.id)
+                    api.getAssignedQuizzesForStudent(user.id),
+                    api.getCourses()
                 ]);
 
                 // Stats calculation
@@ -55,7 +57,7 @@ const StudentDashboard: React.FC = () => {
                     if (quiz) {
                         const course = await api.getCourseById(quiz.courseId);
                         if (course) {
-                            const suggestion = await api.getLearningSuggestion(course.title, quiz.title, latestAttempt.score, latestAttempt.totalPoints);
+                            const suggestion = await api.getLearningSuggestion(latestAttempt, quiz, course, allCourses);
                             setLearningSuggestion(suggestion);
                         }
                     }
@@ -97,35 +99,37 @@ const StudentDashboard: React.FC = () => {
     
     const getActivityIcon = (type: ActivityLogEntry['type']) => {
         switch(type) {
-            case 'quiz_submit': return <CheckIcon className="w-5 h-5 text-green-500"/>;
-            case 'user_login': return <LogInIcon className="w-5 h-5 text-blue-500"/>;
-            default: return <InfoIcon className="w-5 h-5 text-slate-500"/>;
+            case 'quiz_submit': return <CheckIcon className="w-[18px] h-[18px] text-green-500"/>;
+            case 'user_login': return <LogInIcon className="w-[18px] h-[18px] text-blue-500"/>;
+            default: return <InfoIcon className="w-[18px] h-[18px] text-slate-500"/>;
         }
     };
     
     const getSuggestionIcon = () => {
-      if (isSuggestionLoading) return <BotIcon className="w-8 h-8 text-indigo-500" />;
+      if (isSuggestionLoading) return <BotIcon className="w-[30px] h-[30px] text-indigo-500" />;
       const suggestionLower = learningSuggestion.toLowerCase();
       if (suggestionLower.includes('congratulate') || suggestionLower.includes('great job') || suggestionLower.includes('excellent work')) {
-          return <RocketIcon className="w-8 h-8 text-green-500" />;
+          return <RocketIcon className="w-[30px] h-[30px] text-green-500" />;
       }
       if (suggestionLower.includes('review')) {
-          return <BookMarkedIcon className="w-8 h-8 text-amber-500" />;
+          return <BookMarkedIcon className="w-[30px] h-[30px] text-amber-500" />;
       }
-      return <BotIcon className="w-8 h-8 text-indigo-500" />;
+      return <BotIcon className="w-[30px] h-[30px] text-indigo-500" />;
     };
 
 
     if (isLoading) {
         return <div className="text-center p-8">Loading dashboard...</div>;
     }
+    
+    const completionPercentage = stats.assigned > 0 ? Math.round((stats.completed / stats.assigned) * 100) : 0;
 
     return (
         <div className="space-y-6">
             <Card className="bg-white dark:bg-slate-950/50">
                 <CardHeader>
                     <CardTitle className="text-2xl flex items-center gap-2">
-                        <WavingHandIcon className="w-8 h-8 text-yellow-500" />
+                        <WavingHandIcon className="w-[30px] h-[30px] text-yellow-500" />
                         <span>Welcome, {user?.name}!</span>
                     </CardTitle>
                     <CardDescription>Ready to learn something new today?</CardDescription>
@@ -133,11 +137,39 @@ const StudentDashboard: React.FC = () => {
             </Card>
             
             <div className="grid gap-6 md:grid-cols-3">
-                <StatCard icon={<BookOpenIcon className="w-8 h-8 text-purple-500" />} title="Assigned Quizzes" value={stats.assigned} />
-                <StatCard icon={<CheckCircleIcon className="w-8 h-8 text-green-500" />} title="Completed Quizzes" value={stats.completed} />
-                <StatCard icon={<TrendingUpIcon className="w-8 h-8 text-blue-500" />} title="Learning Progress" value={`${stats.progress}%`} />
+                <StatCard icon={<BookOpenIcon className="w-[30px] h-[30px] text-purple-500" />} title="Assigned Quizzes" value={stats.assigned} />
+                <StatCard icon={<CheckCircleIcon className="w-[30px] h-[30px] text-green-500" />} title="Completed Quizzes" value={stats.completed} />
+                <StatCard icon={<TrendingUpIcon className="w-[30px] h-[30px] text-blue-500" />} title="Learning Progress" value={`${stats.progress}%`} />
             </div>
             
+             <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <TargetIcon className="w-6 h-6 text-violet-500" />
+                        <span>Overall Completion Status</span>
+                    </CardTitle>
+                    <CardDescription>
+                        {stats.assigned > 0 
+                            ? `You've completed ${stats.completed} of ${stats.assigned} assigned quizzes. Keep it up!`
+                            : "No quizzes assigned yet. Get ready for your first challenge!"
+                        }
+                    </CardDescription>
+                </CardHeader>
+                {stats.assigned > 0 && (
+                    <CardContent>
+                        <div className="flex items-center gap-4">
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-4">
+                                <div 
+                                    className="bg-violet-600 h-4 rounded-full transition-all duration-500 ease-out" 
+                                    style={{ width: `${completionPercentage}%` }}>
+                                </div>
+                            </div>
+                            <span className="font-bold text-lg">{completionPercentage}%</span>
+                        </div>
+                    </CardContent>
+                )}
+            </Card>
+
             <Card className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-950/50 dark:via-purple-950/50 dark:to-pink-950/50 border-indigo-200 dark:border-indigo-800">
                 <CardHeader className="flex flex-row items-center gap-4">
                     {getSuggestionIcon()}
@@ -174,7 +206,7 @@ const StudentDashboard: React.FC = () => {
                             ))
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full text-center py-4">
-                               <CheckCheckIcon className="w-12 h-12 text-green-500 mb-2" />
+                               <CheckCheckIcon className="w-[46px] h-[46px] text-green-500 mb-2" />
                                <p className="font-semibold">All Clear!</p>
                                <p className="text-slate-500 dark:text-slate-400 text-sm">You have no pending quizzes. Great job!</p>
                             </div>
@@ -226,29 +258,32 @@ const StatCard: React.FC<{icon: React.ReactNode; title: string; value: string | 
 
 // Icons
 const BookOpenIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
 );
 const CheckCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
 );
 const TrendingUpIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
 );
 const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
 );
 const LogInIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
 );
 const InfoIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
 );
 const BotIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
 );
-const WavingHandIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 14c.6.6 1.5 1 2.5 1s2.2-.6 3-1.5c.8-.8 1.5-2 2.5-2s2.3.9 3 1.5c.8.7 1.5 1.5 2.5 1.5s1.9-.4 2.5-1c.6-.6 1-1.5 1-2.5s-.6-2.2-1.5-3c-.8-.8-2-1.5-2-2.5s.4-2.3 1.5-3c.7-.6 1.5-1 2.5-1s1.9.4 2.5 1"/><path d="M12 12V2.5c0-.8-.7-1.5-1.5-1.5S9 1.7 9 2.5V12"/><path d="M12 12H2.5c-.8 0-1.5.7-1.5 1.5S1.7 15 2.5 15H12"/></svg>;
-const RocketIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.3.09-3.1a2.47 2.47 0 0 0-3.1-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>;
-const BookMarkedIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m16 9-3-3-3 3"/></svg>;
-const CheckCheckIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>;
+// FIX: Replace truncated WavingHandIcon and add missing icon definitions.
+const WavingHandIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19.33 13.93a3.48 3.48 0 0 0 0-4.93l-4.24-4.24a3.48 3.48 0 0 0-4.93 0L3 12l7.16 7.16a3.48 3.48 0 0 0 4.93 0l4.24-4.23Z" /><path d="M12.33 11.25 14.5 9.08" /><path d="m15.16 8.42 2.12-2.12" /><path d="m18 5.58 2.12-2.12" /></svg>;
+const RocketIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.3.09-3.1a2 2 0 0 0-2.83-2.83c-.8.61-2.26.62-3.1.09z"/><path d="m12 15-3-3a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2l-3 3"/><path d="M19 6c-1 1-2 2-2 4"/><path d="M22 4s-1 1-2 2"/></svg>;
+const BookMarkedIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><polyline points="10 2 10 10 14 7 18 10 18 2"/></svg>;
+const TargetIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+const CheckCheckIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>;
 
+// FIX: Add default export to resolve import error in App.tsx.
 export default StudentDashboard;

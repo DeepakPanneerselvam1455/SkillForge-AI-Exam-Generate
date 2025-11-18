@@ -1,0 +1,111 @@
+<div class="login-container">
+  <div class="main-card">
+    <!-- Left Side - Login Form -->
+    <div class="left-section">
+      <div class="login-header">
+        <h1 class="brand-title">SkillForge</h1>
+        <h2 class="welcome-title">Welcome Back</h2>
+      </div>
+
+      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+        <div class="form-group">
+          <label for="email">Email Address*</label>
+          <div class="input-container">
+            <input
+              type="email"
+              id="email"
+              formControlName="email"
+              placeholder="Enter your email"
+              [class.error]="isFieldInvalid('email')"
+            />
+            <i class="input-icon email-icon">✉</i>
+          </div>
+          <div *ngIf="isFieldInvalid('email')" class="error-message">
+            <span *ngIf="loginForm.get('email')?.errors?.['required']">Email is required</span>
+            <span *ngIf="loginForm.get('email')?.errors?.['email']">Please enter a valid email</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password*</label>
+          <div class="input-container">
+            <input
+              type="password"
+              id="password"
+              formControlName="password"
+              placeholder="Enter your password"
+              [class.error]="isFieldInvalid('password')"
+            />
+            <i class="input-icon password-icon">🔒</i>
+          </div>
+          <div *ngIf="isFieldInvalid('password')" class="error-message">
+            <span *ngIf="loginForm.get('password')?.errors?.['required']">Password is required</span>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="login-button"
+          [disabled]="loginForm.invalid || isLoading"
+        >
+          <span *ngIf="isLoading" class="spinner"></span>
+          {{ isLoading ? 'Signing In...' : 'Sign In' }}
+        </button>
+
+        <div *ngIf="errorMessage" class="error-message global-error">
+          {{ errorMessage }}
+        </div>
+      </form>
+
+      <div class="login-footer">
+        <p>Don't have an account? <a routerLink="/register">Sign up here</a></p>
+      </div>
+    </div>
+
+    <!-- Right Side - Platform Info -->
+    <div class="right-section">
+      <div class="info-header">
+        <h3>SkillForge Platform</h3>
+        <p>Advanced learning management system with role-based access for enhanced educational experiences</p>
+      </div>
+
+      <div class="platform-info">
+        <div class="info-card">
+          <h4>🎓 Students</h4>
+          <p>Access courses, take assessments, and track your learning progress</p>
+        </div>
+
+        <div class="info-card">
+          <h4>👨‍🏫 Instructors</h4>
+          <p>Create and manage courses, generate AI-powered content, and monitor student progress</p>
+        </div>
+
+        <div class="info-card">
+          <h4>👤 Administrators</h4>
+          <p>Manage platform users, view comprehensive analytics, and oversee system operations</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature Showcase Section -->
+  <div class="features-section">
+    <div class="feature-item">
+      <div class="feature-icon">🤖</div>
+      <h4>AI-Powered Learning</h4>
+      <p>Intelligent quiz generation and adaptive learning paths</p>
+    </div>
+
+    <div class="feature-item">
+      <div class="feature-icon">📊</div>
+      <h4>Advanced Analytics</h4>
+      <p>Comprehensive progress tracking and performance insights</p>
+    </div>
+
+    <div class="feature-item">
+      <div class="feature-icon">👥</div>
+      <h4>Role-Based Access</h4>
+      <p>Tailored experiences for students, mentors, and administrators</p>
+    </div>
+  </div>
+</div>

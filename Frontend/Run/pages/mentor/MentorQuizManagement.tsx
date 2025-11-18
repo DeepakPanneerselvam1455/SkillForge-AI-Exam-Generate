@@ -4,11 +4,12 @@ import * as api from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { Course, Quiz, Question, User } from '../../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
+import { Button, buttonVariants } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import Dialog from '../../components/ui/Dialog';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { cn } from '../../lib/utils';
 
 interface MentorQuizManagementProps {
     isTabView?: boolean;
@@ -21,26 +22,37 @@ const MentorQuizManagement: React.FC<MentorQuizManagementProps> = ({ isTabView =
     const [quizzes, setQuizzes] = useState<Quiz[]>([]);
     const [isLoading, setIsLoading] = useState(!courseProp);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
 
     const courseId = courseProp?.id || paramCourseId;
 
-    const fetchQuizzes = () => {
+    const fetchQuizzes = async () => {
         if(courseId) {
             setIsLoading(true);
-            api.getQuizzesByCourse(courseId)
-               .then(setQuizzes)
-               .finally(() => setIsLoading(false));
+            try {
+                const courseQuizzes = await api.getQuizzesByCourse(courseId);
+                setQuizzes(courseQuizzes);
+            } catch (err) {
+                console.error("Failed to fetch quizzes", err);
+            } finally {
+                setIsLoading(false);
+            }
         }
     }
 
     useEffect(() => {
         const fetchCourseData = async () => {
-            if (!courseId) return;
+            if (!courseId || courseProp) {
+                if (courseProp) {
+                    setCourse(courseProp);
+                    await fetchQuizzes();
+                }
+                return;
+            };
             setIsLoading(true);
             try {
-                const courseData = courseProp || await api.getCourseById(courseId);
+                const courseData = await api.getCourseById(courseId);
                 setCourse(courseData);
                 if (courseData) {
                     const courseQuizzes = await api.getQuizzesByCourse(courseData.id);
@@ -61,12 +73,12 @@ const MentorQuizManagement: React.FC<MentorQuizManagementProps> = ({ isTabView =
         setIsAssignModalOpen(true);
     };
 
-    const handleEditClick = (quiz: Quiz) => {
+    const handleDeleteClick = (quiz: Quiz) => {
         setSelectedQuiz(quiz);
-        setIsEditModalOpen(true);
+        setIsDeleteModalOpen(true);
     };
 
-    if (isLoading) {
+    if (isLoading && !course) {
         return <div className="text-center p-8">Loading quizzes...</div>;
     }
     
@@ -97,44 +109,59 @@ const MentorQuizManagement: React.FC<MentorQuizManagementProps> = ({ isTabView =
                        <Card key={quiz.id} className="flex flex-col">
                             <CardHeader>
                                 <CardTitle>{quiz.title}</CardTitle>
-                                <CardDescription>{quiz.questions.length} Questions</CardDescription>
+                                <CardDescription>A quiz based on this course's topics.</CardDescription>
                             </CardHeader>
-                            <CardContent className="flex-grow">
-                                <Badge variant="secondary">{quiz.difficulty}</Badge>
+                            <CardContent className="flex-grow space-y-4">
+                                <div className="flex flex-wrap gap-2">
+                                    <Badge variant="secondary">{quiz.difficulty}</Badge>
+                                    <Badge variant="outline">{quiz.questions.length} Questions</Badge>
+                                     {quiz.duration && <Badge variant="outline">{quiz.duration} min</Badge>}
+                                </div>
+                                {course.topics.length > 0 && (
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Course Topics</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {course.topics.map(topic => (
+                                                <Badge key={topic} variant="outline">{topic}</Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
-                            <CardFooter className="grid grid-cols-2 gap-2">
-                                 <Button variant="outline" size="sm" onClick={() => handleEditClick(quiz)}>
-                                    <PencilIcon className="w-4 h-4 mr-2" />
-                                    Edit
-                                </Button>
-                                <Button size="sm" onClick={() => handleAssignClick(quiz)}>
-                                    <UsersIcon className="w-4 h-4 mr-2" />
+                            <CardFooter className="grid grid-cols-3 gap-2">
+                                 <Button variant="default" size="sm" onClick={() => handleAssignClick(quiz)}>
                                     Assign
-                                </Button>
+                                 </Button>
+                                 <Link to={`/mentor/quiz/${quiz.id}/edit`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+                                    Edit
+                                 </Link>
+                                 <Button variant="destructive" size="sm" onClick={() => handleDeleteClick(quiz)}>
+                                    Delete
+                                 </Button>
                             </CardFooter>
                         </Card>
                     ))}
                 </div>
             ) : (
                  <div className="text-center py-16 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                    <p className="text-lg font-semibold">No quizzes for this course yet.</p>
-                    <p className="text-slate-500 dark:text-slate-400">Use the AI Generator to create the first one!</p>
+                    <HelpCircleIcon className="w-[62px] h-[62px] mx-auto text-indigo-500" />
+                    <p className="mt-4 text-lg font-semibold">No Quizzes Yet</p>
+                    <p className="text-slate-500 dark:text-slate-400">Click "Generate AI Quiz" to create the first quiz for this course.</p>
                 </div>
             )}
-
+            
             {selectedQuiz && (
                 <>
-                    <AssignQuizDialog
+                    <AssignQuizDialog 
                         isOpen={isAssignModalOpen}
                         onClose={() => setIsAssignModalOpen(false)}
-                        onQuizAssigned={() => setIsAssignModalOpen(false)}
                         quiz={selectedQuiz}
                     />
-                    <EditQuizDialog
-                        isOpen={isEditModalOpen}
-                        onClose={() => setIsEditModalOpen(false)}
-                        onQuizUpdated={fetchQuizzes}
+                    <DeleteQuizDialog
+                        isOpen={isDeleteModalOpen}
+                        onClose={() => setIsDeleteModalOpen(false)}
                         quiz={selectedQuiz}
+                        onQuizDeleted={fetchQuizzes}
                     />
                 </>
             )}
@@ -143,286 +170,154 @@ const MentorQuizManagement: React.FC<MentorQuizManagementProps> = ({ isTabView =
 };
 
 
-// --- Assign Quiz Dialog ---
-interface AssignQuizDialogProps {
-    isOpen: boolean; onClose: () => void; onQuizAssigned: () => void; quiz: Quiz;
-}
-const AssignQuizDialog: React.FC<AssignQuizDialogProps> = ({ isOpen, onClose, onQuizAssigned, quiz }) => {
+// --- DIALOGS ---
+
+interface AssignQuizDialogProps { isOpen: boolean; onClose: () => void; quiz: Quiz; }
+const AssignQuizDialog: React.FC<AssignQuizDialogProps> = ({ isOpen, onClose, quiz }) => {
     const [students, setStudents] = useState<User[]>([]);
-    const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+    const [dueDate, setDueDate] = useState('');
+    const [isAssigning, setIsAssigning] = useState(false);
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
 
     useEffect(() => {
-        if (isOpen) {
-            const fetchStudents = async () => {
-                setIsLoading(true);
-                try {
-                    const allUsers = await api.getUsers();
-                    setStudents(allUsers.filter(u => u.role === 'student'));
-                } catch (err) {
-                    setError('Failed to load students.');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            fetchStudents();
-            setSelectedStudentIds(new Set()); // Reset on open
+        if(isOpen) {
+            api.getUsers().then(allUsers => {
+                setStudents(allUsers.filter(u => u.role === 'student'));
+            });
+            // Reset state on open
+            setSelectedStudentIds([]);
+            setDueDate('');
+            setError('');
+            setSuccessMessage('');
         }
     }, [isOpen]);
 
-    const handleSelectStudent = (studentId: string) => {
-        setSelectedStudentIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(studentId)) {
-                newSet.delete(studentId);
-            } else {
-                newSet.add(studentId);
-            }
-            return newSet;
-        });
+    const handleStudentSelect = (studentId: string) => {
+        setSelectedStudentIds(prev => 
+            prev.includes(studentId) 
+                ? prev.filter(id => id !== studentId)
+                : [...prev, studentId]
+        );
     };
 
-    const handleAssign = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        if (selectedStudentIds.size === 0) {
-            setError('Please select at least one student.');
+    const handleSelectAll = () => {
+        if (selectedStudentIds.length === students.length) {
+            setSelectedStudentIds([]);
+        } else {
+            setSelectedStudentIds(students.map(s => s.id));
+        }
+    };
+
+    const handleAssign = async () => {
+        if (selectedStudentIds.length === 0) {
+            setError("Please select at least one student.");
             return;
         }
-        setIsSubmitting(true);
+        setIsAssigning(true);
+        setError('');
         try {
-            await api.createQuizAssignments(quiz.id, Array.from(selectedStudentIds));
-            onQuizAssigned();
+            await api.createQuizAssignments(quiz.id, selectedStudentIds, dueDate || undefined);
+            setSuccessMessage(`Quiz successfully assigned to ${selectedStudentIds.length} student(s).`);
+            setTimeout(() => {
+                onClose();
+            }, 2000);
         } catch(err) {
-            setError('An error occurred while assigning the quiz.');
+            setError("Failed to assign quiz.");
         } finally {
-            setIsSubmitting(false);
+            setIsAssigning(false);
         }
     };
     
     return (
-        <Dialog isOpen={isOpen} onClose={onClose} title={`Assign "${quiz.title}"`}>
-            <form onSubmit={handleAssign}>
-                <div className="space-y-4">
-                    <p className="text-sm text-slate-500">Select students to assign this quiz to.</p>
-                    {isLoading ? (
-                        <p>Loading students...</p>
-                    ) : error ? (
-                         <p className="text-sm text-red-500">{error}</p>
-                    ) : (
-                        <div className="max-h-60 overflow-y-auto border rounded-md p-2 space-y-2">
-                            {students.length > 0 ? students.map(student => (
-                                <label key={student.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentIds.has(student.id)}
-                                        onChange={() => handleSelectStudent(student.id)}
-                                        className="w-4 h-4"
+        <Dialog isOpen={isOpen} onClose={onClose} title={`Assign Quiz: ${quiz.title}`}>
+             <div className="space-y-4">
+                {successMessage ? (
+                    <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-md">
+                        <p className="font-semibold text-green-700 dark:text-green-300">{successMessage}</p>
+                    </div>
+                ) : (
+                    <>
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Select Students</label>
+                            <div className="border rounded-md max-h-60 overflow-y-auto p-2 dark:border-slate-700">
+                                <div className="flex items-center p-2 border-b dark:border-slate-700">
+                                    <input 
+                                        type="checkbox" 
+                                        id="select-all" 
+                                        className="w-4 h-4 mr-3"
+                                        checked={selectedStudentIds.length === students.length && students.length > 0}
+                                        onChange={handleSelectAll}
                                     />
-                                    <div>
-                                        <p className="font-medium">{student.name}</p>
-                                        <p className="text-xs text-slate-500">{student.email}</p>
+                                    <label htmlFor="select-all" className="font-medium">Select All</label>
+                                </div>
+                                {students.map(student => (
+                                    <div key={student.id} className="flex items-center p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <input 
+                                            type="checkbox" 
+                                            id={`student-${student.id}`} 
+                                            className="w-4 h-4 mr-3"
+                                            checked={selectedStudentIds.includes(student.id)}
+                                            onChange={() => handleStudentSelect(student.id)}
+                                        />
+                                        <label htmlFor={`student-${student.id}`}>{student.name} ({student.email})</label>
                                     </div>
-                                </label>
-                            )) : <p className="text-sm text-slate-500 text-center p-4">No students found.</p>}
+                                ))}
+                            </div>
                         </div>
-                    )}
-                    {error && !isLoading && <p className="text-sm text-red-500">{error}</p>}
-                </div>
-                <div className="flex justify-end gap-2 pt-6">
-                    <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-                    <Button type="submit" disabled={isSubmitting || isLoading || students.length === 0}>
-                        {isSubmitting ? 'Assigning...' : `Assign to ${selectedStudentIds.size} Student(s)`}
-                    </Button>
-                </div>
-            </form>
+                        <div>
+                            <label htmlFor="due-date" className="block text-sm font-medium mb-1">Due Date (Optional)</label>
+                            <Input id="due-date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                        </div>
+                        {error && <p className="text-sm text-red-500">{error}</p>}
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                            <Button onClick={handleAssign} disabled={isAssigning}>{isAssigning ? 'Assigning...' : 'Assign Quiz'}</Button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </Dialog>
+    )
+}
+
+interface DeleteQuizDialogProps { isOpen: boolean; onClose: () => void; quiz: Quiz; onQuizDeleted: () => void; }
+const DeleteQuizDialog: React.FC<DeleteQuizDialogProps> = ({ isOpen, onClose, quiz, onQuizDeleted }) => {
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await api.deleteQuiz(quiz.id);
+            onQuizDeleted();
+            onClose();
+        } catch (err) {
+            console.error("Failed to delete quiz", err);
+            // could set an error state here
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    return (
+        <Dialog 
+            isOpen={isOpen} 
+            onClose={onClose} 
+            title="Delete Quiz"
+            description={`Are you sure you want to delete "${quiz.title}"? This action will also remove all associated student attempts and cannot be undone.`}
+        >
+            <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={onClose} disabled={isDeleting}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>{isDeleting ? 'Deleting...' : 'Delete Quiz'}</Button>
+            </div>
         </Dialog>
     );
 }
 
 
-// --- Edit Quiz Dialog ---
-interface EditQuizDialogProps {
-    isOpen: boolean; onClose: () => void; onQuizUpdated: () => void; quiz: Quiz;
-}
-const EditQuizDialog: React.FC<EditQuizDialogProps> = ({ isOpen, onClose, onQuizUpdated, quiz }) => {
-    const [editableQuiz, setEditableQuiz] = useState<Quiz | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const dragItem = useRef<number | null>(null);
-    const dragOverItem = useRef<number | null>(null);
 
-    useEffect(() => {
-        if(quiz) {
-            setEditableQuiz(JSON.parse(JSON.stringify(quiz)));
-        }
-    }, [quiz, isOpen])
-
-    const handleQuizDataChange = (field: keyof Quiz, value: any) => {
-        if(!editableQuiz) return;
-        setEditableQuiz(prev => prev ? ({ ...prev, [field]: value }) : null);
-    }
-
-    const handleQuestionChange = (qIndex: number, field: keyof Question, value: any) => {
-        if(!editableQuiz) return;
-        const newQuestions = [...editableQuiz.questions];
-        (newQuestions[qIndex] as any)[field] = value;
-        setEditableQuiz(prev => prev ? ({ ...prev, questions: newQuestions }) : null);
-    }
-
-    const handleOptionChange = (qIndex: number, oIndex: number, value: string) => {
-        if(!editableQuiz) return;
-        const newQuestions = [...editableQuiz.questions];
-        if (newQuestions[qIndex].options) {
-            newQuestions[qIndex].options![oIndex] = value;
-        }
-        setEditableQuiz(prev => prev ? ({ ...prev, questions: newQuestions }) : null);
-    }
-    
-    const handleRemoveQuestion = (qIndex: number) => {
-        if(!editableQuiz) return;
-        const newQuestions = editableQuiz.questions.filter((_, index) => index !== qIndex);
-        setEditableQuiz(prev => prev ? ({ ...prev, questions: newQuestions }) : null);
-    }
-
-    const handleAddQuestion = (type: 'multiple-choice' | 'short-answer') => {
-        if (!editableQuiz) return;
-        const newQuestion: Question = {
-            id: `new-q-${Date.now()}`,
-            type,
-            question: 'New Question',
-            correctAnswer: '',
-            points: 10,
-            ...(type === 'multiple-choice' && { options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'] })
-        };
-        setEditableQuiz(prev => prev ? ({ ...prev, questions: [...prev.questions, newQuestion] }) : null);
-    }
-    
-    const handleDragSort = () => {
-        if (dragItem.current === null || dragOverItem.current === null || !editableQuiz) return;
-        const newQuestions = [...editableQuiz.questions];
-        const draggedItemContent = newQuestions.splice(dragItem.current, 1)[0];
-        newQuestions.splice(dragOverItem.current, 0, draggedItemContent);
-        dragItem.current = null;
-        dragOverItem.current = null;
-        setEditableQuiz(prev => prev ? ({ ...prev, questions: newQuestions }) : null);
-    };
-
-    const handleSaveChanges = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if(!editableQuiz) return;
-        setIsSubmitting(true);
-        setError('');
-        try {
-            await api.updateQuiz(editableQuiz);
-            onQuizUpdated();
-            onClose();
-        } catch (err) {
-            setError("Failed to save changes.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    }
-
-    if (!editableQuiz) return null;
-
-    return (
-        <Dialog isOpen={isOpen} onClose={onClose} title="Edit Quiz">
-            <form onSubmit={handleSaveChanges} className="space-y-4">
-                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4 -mr-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Quiz Title</label>
-                        <Input value={editableQuiz.title} onChange={e => handleQuizDataChange('title', e.target.value)} required />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Difficulty</label>
-                        <Select value={editableQuiz.difficulty} onChange={e => handleQuizDataChange('difficulty', e.target.value as any)} required>
-                            <option>Beginner</option>
-                            <option>Intermediate</option>
-                            <option>Advanced</option>
-                        </Select>
-                    </div>
-
-                    <h3 className="text-lg font-semibold pt-4 border-t dark:border-slate-700">Questions</h3>
-                    <div className="space-y-4">
-                        {editableQuiz.questions.map((q, qIndex) => (
-                            <div 
-                                key={q.id}
-                                draggable
-                                onDragStart={() => dragItem.current = qIndex}
-                                onDragEnter={() => dragOverItem.current = qIndex}
-                                onDragEnd={handleDragSort}
-                                onDragOver={(e) => e.preventDefault()}
-                            >
-                                <Card className="bg-slate-50 dark:bg-slate-900 cursor-grab active:cursor-grabbing">
-                                    <CardHeader className="flex flex-row justify-between items-start">
-                                        <div className="flex items-center gap-2">
-                                            <GripVerticalIcon className="w-5 h-5 text-slate-400" />
-                                            <CardTitle className="text-base">Question {qIndex + 1}</CardTitle>
-                                        </div>
-                                        <Button type="button" variant="ghost" size="sm" className="text-red-500 hover:text-red-600" onClick={() => handleRemoveQuestion(qIndex)}>Remove</Button>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div>
-                                            <label className="text-xs font-medium">Question Text</label>
-                                            <Input value={q.question} onChange={e => handleQuestionChange(qIndex, 'question', e.target.value)} />
-                                        </div>
-                                        {q.type === 'multiple-choice' && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {q.options?.map((opt, oIndex) => (
-                                                    <div key={oIndex}>
-                                                        <label className="text-xs font-medium">Option {oIndex + 1}</label>
-                                                        <Input value={opt} onChange={e => handleOptionChange(qIndex, oIndex, e.target.value)} />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="text-xs font-medium">Correct Answer</label>
-                                                {q.type === 'multiple-choice' ? (
-                                                    <Select value={q.correctAnswer} onChange={e => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)}>
-                                                        {q.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                    </Select>
-                                                ) : (
-                                                    <Input value={q.correctAnswer} onChange={e => handleQuestionChange(qIndex, 'correctAnswer', e.target.value)} />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <label className="text-xs font-medium">Points</label>
-                                                <Input type="number" value={q.points} onChange={e => handleQuestionChange(qIndex, 'points', parseInt(e.target.value) || 0)} />
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {error && <p className="text-sm text-red-500">{error}</p>}
-                <div className="flex justify-between gap-2 pt-4 border-t dark:border-slate-800">
-                    <div className="flex gap-2">
-                         <Button type="button" variant="secondary" onClick={() => handleAddQuestion('multiple-choice')}>Add Multiple Choice</Button>
-                         <Button type="button" variant="secondary" onClick={() => handleAddQuestion('short-answer')}>Add Short Answer</Button>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Changes'}</Button>
-                    </div>
-                </div>
-            </form>
-        </Dialog>
-    )
-}
-
-
-// Icons
-const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="22" y1="2" y2="6"/><path d="M7.5 20.5 19 9l-4-4L3.5 16.5 2 22z"/></svg>;
-const GripVerticalIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1" /><circle cx="9" cy="5" r="1" /><circle cx="9" cy="19" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="15" cy="5" r="1" /><circle cx="15" cy="19" r="1" /></svg>
-
+// ICONS
+const HelpCircleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
 export default MentorQuizManagement;

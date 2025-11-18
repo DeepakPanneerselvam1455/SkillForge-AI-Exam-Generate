@@ -1,0 +1,104 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <div class="header-content">
+      <h1>Student Dashboard</h1>
+      <div class="user-info">
+        <span>Welcome, {{ user?.name }}!</span>
+        <button (click)="logout()" class="logout-btn">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="dashboard-nav">
+    <div class="nav-content">
+      <a routerLink="/dashboard/student" routerLinkActive="active" class="nav-item">
+        <i class="icon">📚</i>
+        Learning Modules
+      </a>
+      <a routerLink="/dashboard/student/courses" routerLinkActive="active" class="nav-item">
+        <i class="icon">🎓</i>
+        My Courses
+      </a>
+      <a routerLink="/dashboard/student/progress" routerLinkActive="active" class="nav-item">
+        <i class="icon">📊</i>
+        Progress
+      </a>
+      <a routerLink="/dashboard/student/profile" routerLinkActive="active" class="nav-item">
+        <i class="icon">👤</i>
+        Profile
+      </a>
+    </div>
+  </nav>
+
+  <main class="dashboard-main">
+    <div class="dashboard-content">
+      <div class="welcome-section">
+        <h2>Welcome to Your Learning Journey!</h2>
+        <p>Continue your education with our comprehensive learning modules.</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📚</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.enrolledCourses || 0 }}</h3>
+            <p>Enrolled Courses</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">✅</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.completedQuizzes || 0 }}</h3>
+            <p>Completed Quizzes</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📈</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.learningProgress || 0 }}%</h3>
+            <p>Learning Progress</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="learning-modules">
+        <h3>Available Learning Modules</h3>
+        <div class="modules-grid">
+          <div *ngFor="let module of dashboardData?.learningModules" class="module-card">
+            <div class="module-icon">🎯</div>
+            <h4>{{ module }}</h4>
+            <p>Start your learning journey with this comprehensive module.</p>
+            <button class="module-btn">Start Learning</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="recent-activity">
+        <h3>Recent Activity</h3>
+        <div class="activity-list">
+          <div class="activity-item">
+            <div class="activity-icon">📖</div>
+            <div class="activity-content">
+              <h4>Started Programming Fundamentals</h4>
+              <p>2 hours ago</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon">✅</div>
+            <div class="activity-content">
+              <h4>Completed Web Development Quiz</h4>
+              <p>1 day ago</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon">🎓</div>
+            <div class="activity-content">
+              <h4>Enrolled in Database Design Course</h4>
+              <p>3 days ago</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

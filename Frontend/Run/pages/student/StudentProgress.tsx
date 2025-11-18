@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import * as api from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -174,25 +175,25 @@ const StudentProgress: React.FC = () => {
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                  <StatCard 
-                    icon={<PercentIcon className="w-8 h-8 text-blue-500" />} 
+                    icon={<PercentIcon className="w-[30px] h-[30px] text-blue-500" />} 
                     title="Overall Average Score" 
                     value={`${summaryStats.overallAverageScore}%`} 
                     description="Across all completed quizzes"
                 />
                 <StatCard 
-                    icon={<CheckCircle2Icon className="w-8 h-8 text-green-500" />} 
+                    icon={<CheckCircle2Icon className="w-[30px] h-[30px] text-green-500" />} 
                     title="Quizzes Completed" 
                     value={summaryStats.completedQuizzes} 
                     description="Total quizzes you have taken"
                 />
                 <StatCard 
-                    icon={<AwardIcon className="w-8 h-8 text-yellow-500" />} 
+                    icon={<AwardIcon className="w-[30px] h-[30px] text-yellow-500" />} 
                     title="Best Topic" 
                     value={summaryStats.bestTopic ? summaryStats.bestTopic.topic : 'N/A'}
                     description={summaryStats.bestTopic ? `Avg score: ${summaryStats.bestTopic.averageScore}%` : 'Complete a quiz to find out'}
                 />
                 <StatCard 
-                    icon={<TrendingDownIcon className="w-8 h-8 text-red-500" />} 
+                    icon={<TrendingDownIcon className="w-[30px] h-[30px] text-red-500" />} 
                     title="Needs Improvement" 
                     value={summaryStats.topicToImprove ? summaryStats.topicToImprove.topic : 'N/A'}
                     description={summaryStats.topicToImprove ? `Avg score: ${summaryStats.topicToImprove.averageScore}%` : 'Keep learning!'}
@@ -261,7 +262,7 @@ const StudentProgress: React.FC = () => {
                             </div>
                         ) : (
                             <div className="text-center py-10 h-80 flex flex-col items-center justify-center">
-                                <BarChartIcon className="w-12 h-12 text-slate-400 mb-2" />
+                                <BarChartIcon className="w-[46px] h-[46px] text-slate-400 mb-2" />
                                 <p className="font-semibold">Not Enough Data</p>
                                 <p className="text-slate-500 dark:text-slate-400 text-sm">
                                     {attempts.length < 2 ? "Complete at least two quizzes to see your trend!" : "Take a quiz to start tracking your progress."}
@@ -338,7 +339,7 @@ const StudentProgress: React.FC = () => {
                         </div>
                     ) : (
                          <div className="text-center py-16">
-                            <HistoryIcon className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+                            <HistoryIcon className="w-[46px] h-[46px] text-slate-400 mx-auto mb-2" />
                             <p className="font-semibold">No History Yet</p>
                             <p className="text-slate-500 dark:text-slate-400 text-sm">Your quiz attempts will be logged here once you complete them.</p>
                         </div>
@@ -365,11 +366,11 @@ const StatCard: React.FC<{
     </Card>
 );
 
-const PercentIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>;
-const CheckCircle2Icon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>;
-const AwardIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>;
-const TrendingDownIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>;
-const BarChartIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>;
-const HistoryIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
+const PercentIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>;
+const CheckCircle2Icon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>;
+const AwardIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>;
+const TrendingDownIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>;
+const BarChartIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>;
+const HistoryIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>;
 
 export default StudentProgress;

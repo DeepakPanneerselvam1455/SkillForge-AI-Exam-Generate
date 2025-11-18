@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -75,16 +76,16 @@ const MentorCourseManagement: React.FC = () => {
                                 </div>
                             </CardContent>
                             <CardFooter className="grid grid-cols-3 gap-2">
-                                <Link to={`/mentor/course/${course.id}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'col-span-3')}>Manage Quizzes</Link>
-                                <Button variant="ghost" size="sm" onClick={() => handleEditClick(course)}>Edit</Button>
-                                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/50 dark:hover:text-red-500" onClick={() => handleDeleteClick(course)}>Delete</Button>
+                                <Link to={`/mentor/course/${course.id}`} className={cn(buttonVariants({ variant: 'default', size: 'sm' }))}>Manage</Link>
+                                <Button variant="outline" size="sm" onClick={() => handleEditClick(course)}>Edit</Button>
+                                <Button variant="outline" size="sm" className="text-red-600 border-red-600/50 hover:bg-red-50 hover:text-red-700 dark:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:border-red-500/50" onClick={() => handleDeleteClick(course)}>Delete</Button>
                             </CardFooter>
                         </Card>
                     ))}
                 </div>
             ) : (
                 <div className="text-center py-16 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                    <LightbulbIcon className="w-16 h-16 mx-auto text-yellow-500" />
+                    <LightbulbIcon className="w-[62px] h-[62px] mx-auto text-yellow-500" />
                     <p className="mt-4 text-lg font-semibold">Share Your Knowledge!</p>
                     <p className="text-slate-500 dark:text-slate-400">Click "Create Course" to build your first learning experience.</p>
                 </div>
@@ -158,13 +159,17 @@ const CourseForm: React.FC<{
         e.preventDefault();
         setError('');
         try {
+            // Fix: Pass all required properties to satisfy the Omit<Course, ...> type.
             await onSave({
                 title,
                 description,
                 difficulty,
                 topics: topics.split(',').map(t => t.trim()).filter(Boolean),
-                // FIX: Use `id` from destructuring instead of `mat.id` which does not exist.
-                materials: materials.map(({id, ...mat}) => ({...mat, id: id.startsWith('temp-') ? `mat-${Date.now()}` : id})) // Ensure proper IDs
+                materials: materials.map(({id, ...mat}) => ({...mat, id: id.startsWith('temp-') ? `mat-${Date.now()}` : id})), // Ensure proper IDs
+                instructorName: course!.instructorName,
+                institutionName: course!.institutionName,
+                publishDate: course!.publishDate,
+                language: course!.language,
             });
             onClose();
         } catch(err) {
@@ -202,7 +207,7 @@ const CourseForm: React.FC<{
                         {materials.map(mat => (
                             <li key={mat.id} className="flex items-center justify-between p-2 bg-slate-100 dark:bg-slate-800 rounded">
                                 <div className="flex items-center gap-2 overflow-hidden">
-                                    <FileIcon className="w-4 h-4 text-slate-500 shrink-0" />
+                                    <FileIcon className="w-[14px] h-[14px] text-slate-500 shrink-0" />
                                     <span className="font-medium text-sm truncate" title={mat.title}>{mat.title}</span>
                                 </div>
                                 <Button type="button" variant="ghost" size="sm" className="text-red-500 hover:text-red-600" onClick={() => handleRemoveMaterial(mat.id)}>Remove</Button>
@@ -269,6 +274,13 @@ const EditCourseDialog: React.FC<EditCourseDialogProps> = ({ isOpen, onClose, on
 interface DeleteCourseDialogProps { isOpen: boolean; onClose: () => void; onCourseDeleted: () => void; course: Course; }
 const DeleteCourseDialog: React.FC<DeleteCourseDialogProps> = ({ isOpen, onClose, onCourseDeleted, course }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [confirmationText, setConfirmationText] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setConfirmationText('');
+        }
+    }, [isOpen]);
 
     const handleDelete = async () => {
         setIsSubmitting(true);
@@ -283,25 +295,49 @@ const DeleteCourseDialog: React.FC<DeleteCourseDialogProps> = ({ isOpen, onClose
         }
     };
 
+    const isConfirmationMatch = confirmationText === course.title;
+
     return (
         <Dialog 
             isOpen={isOpen} 
             onClose={onClose} 
-            title="Delete Course"
-            description={`Are you sure you want to delete "${course.title}"? This will also remove associated quizzes and cannot be undone.`}
+            title="Are you absolutely sure?"
+            description="This action is permanent and cannot be undone."
         >
-            <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting}>{isSubmitting ? 'Deleting...' : 'Delete Course'}</Button>
+            <div className="space-y-6 pt-2">
+                <p className="text-sm">
+                    You are about to permanently delete the course <strong className="font-semibold text-slate-900 dark:text-slate-100">"{course.title}"</strong>. This will also remove all associated quizzes and student submission data.
+                </p>
+                <div>
+                    <label htmlFor="delete-confirm" className="block text-sm font-medium mb-1">
+                        To confirm this action, type <strong className="font-semibold text-red-600 dark:text-red-500">{course.title}</strong> below:
+                    </label>
+                    <Input 
+                        id="delete-confirm"
+                        value={confirmationText}
+                        onChange={e => setConfirmationText(e.target.value)}
+                        autoComplete="off"
+                    />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+                    <Button 
+                        variant="destructive" 
+                        onClick={handleDelete} 
+                        disabled={!isConfirmationMatch || isSubmitting}
+                    >
+                        {isSubmitting ? 'Deleting...' : 'Delete this course'}
+                    </Button>
+                </div>
             </div>
         </Dialog>
     );
 }
 
 const FileIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
 );
-const LightbulbIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
+const LightbulbIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
 
 
 export default MentorCourseManagement;

@@ -1,6 +1,55 @@
-# Skillforge
+# SkillForge Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.7.
+This is the frontend application for SkillForge - an AI-driven adaptive learning platform. Built with Angular 20 and TypeScript, it provides an intuitive interface for students, instructors, and administrators.
+
+## 🚀 Tech Stack
+
+- **Angular 20** (Generated with Angular CLI version 20.3.6)
+- **TypeScript**
+- **Standalone Components**
+- **Reactive Forms**
+- **JWT Authentication**
+- **Role-based Routing**
+- **Responsive CSS Design**
+
+## 🔐 Demo Credentials
+
+The application includes pre-configured demo accounts for immediate testing:
+
+| Role | Email | Password | Access Level |
+|------|-------|----------|-------------|
+| **Admin** | `admin@skillforge.com` | `Admin@123` | Full system administration |
+| **Instructor** | `instructor@skillforge.com` | `Instr@123` | Course and quiz management |
+| **Student** | `student@skillforge.com` | `Stud@123` | Learning and quiz taking |
+
+### Quick Login Features
+- **One-Click Demo Login**: Click any demo credential button on the login page
+- **Auto-Fill & Submit**: Credentials are automatically filled and submitted
+- **Visual Role Indicators**: Color-coded buttons for easy identification
+- **Instant Access**: No need to remember or type credentials
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ 
+- npm 10+
+- Angular CLI 20+
+
+### Setup & Installation
+```bash
+# Install dependencies
+npm install
+
+# Install zone.js if missing
+npm install zone.js
+
+# Start development server
+ng serve
+```
+
+### Access the Application
+- **Frontend URL**: http://localhost:4200
+- **Backend API**: http://localhost:8080 (must be running)
 
 ## Development server
 

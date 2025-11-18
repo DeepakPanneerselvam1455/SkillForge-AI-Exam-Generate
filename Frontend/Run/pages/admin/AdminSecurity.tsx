@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -40,7 +41,7 @@ const AdminSecurity: React.FC = () => {
 
     return (
         <div className="space-y-6">
-             <h1 className="text-3xl font-bold tracking-tight">Security Settings</h1>
+             <h1 className="text-3xl font-bold tracking-tight dark:text-white">Security Settings</h1>
             
             <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
@@ -66,7 +67,7 @@ const SecurityTabButton: React.FC<{ tab: SecurityTab; activeTab: SecurityTab; on
                 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
                 activeTab === tab
                     ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:border-slate-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-300 dark:hover:text-white dark:hover:border-slate-600'
             )}
         >
             {children}
@@ -183,7 +184,7 @@ const PasswordPolicy = () => {
             <div>
                 <label className="font-medium text-sm">Password Expiration (days)</label>
                 <Input type="number" value={policy.expirationDays} onChange={e => handleChange('expirationDays', parseInt(e.target.value) || 0)} />
-                <p className="text-xs text-slate-500 mt-1">Set to 0 to disable expiration.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">Set to 0 to disable expiration.</p>
             </div>
         </CardContent>
          <CardFooter className="flex justify-end">
@@ -197,9 +198,22 @@ const AuditLog = () => {
     const [filter, setFilter] = useState('');
 
     useEffect(() => {
-        setLogs(getActivityLog());
+        const securityLogTypes: ActivityLogEntry['type'][] = [
+            'user_role_change', 
+            'user_password_reset', 
+            'system_setting_change',
+            'user_login',
+            'user_create',
+            'user_delete',
+            'security_alert'
+        ];
+        const allLogs = getActivityLog();
+        setLogs(allLogs.filter(log => securityLogTypes.includes(log.type)));
+        
         const handleNewLog = (newLog: ActivityLogEntry) => {
-            setLogs(prev => [newLog, ...prev]);
+            if (securityLogTypes.includes(newLog.type)) {
+                setLogs(prev => [newLog, ...prev]);
+            }
         };
         subscribe(handleNewLog);
         return () => unsubscribe(handleNewLog);
@@ -209,7 +223,8 @@ const AuditLog = () => {
         return logs.filter(log => 
             log.title.toLowerCase().includes(filter.toLowerCase()) || 
             log.type.toLowerCase().includes(filter.toLowerCase()) ||
-            (log.details?.userId && log.details.userId.toLowerCase().includes(filter.toLowerCase()))
+            (log.details?.userName && log.details.userName.toLowerCase().includes(filter.toLowerCase())) ||
+            (log.details?.adminName && log.details.adminName.toLowerCase().includes(filter.toLowerCase()))
         );
     }, [logs, filter]);
 
@@ -217,11 +232,11 @@ const AuditLog = () => {
     <Card>
         <CardHeader>
             <CardTitle>Audit Log</CardTitle>
-            <CardDescription>Tracks significant events and administrative actions within the system.</CardDescription>
+            <CardDescription>Tracks security-sensitive events and administrative actions within the system.</CardDescription>
         </CardHeader>
         <CardContent>
              <div className="flex justify-between items-center mb-4">
-                <Input placeholder="Filter by user or action..." className="max-w-xs" value={filter} onChange={e => setFilter(e.target.value)} />
+                <Input placeholder="Filter by user, admin, or action..." className="max-w-xs" value={filter} onChange={e => setFilter(e.target.value)} />
                 <Button variant="outline" onClick={() => alert('Exporting log...')}>Export Log</Button>
             </div>
             <div className="overflow-x-auto border rounded-lg max-h-96">
@@ -231,6 +246,8 @@ const AuditLog = () => {
                             <th className="p-3 font-medium">Timestamp</th>
                             <th className="p-3 font-medium">Action</th>
                             <th className="p-3 font-medium">Details</th>
+                            <th className="p-3 font-medium">User Involved</th>
+                            <th className="p-3 font-medium">Performed By</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -239,9 +256,11 @@ const AuditLog = () => {
                                 <td className="p-3 whitespace-nowrap" title={new Date(log.timestamp).toLocaleString()}>{formatTimeAgo(log.timestamp)}</td>
                                 <td className="p-3"><span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{log.type}</span></td>
                                 <td className="p-3">{log.title}</td>
+                                <td className="p-3 text-slate-500 dark:text-slate-300">{log.details?.userName || log.details?.userId || 'N/A'}</td>
+                                <td className="p-3 text-slate-500 dark:text-slate-300">{log.details?.adminName || 'System'}</td>
                             </tr>
                         )) : (
-                            <tr><td colSpan={3} className="text-center p-8 text-slate-500">No logs found.</td></tr>
+                            <tr><td colSpan={5} className="text-center p-8 text-slate-500 dark:text-slate-300">No security logs found.</td></tr>
                         )}
                     </tbody>
                 </table>

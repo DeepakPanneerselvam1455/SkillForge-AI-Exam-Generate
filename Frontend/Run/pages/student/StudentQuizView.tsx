@@ -1,91 +1,114 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+// FIX: Replaced useHistory with useNavigate for react-router-dom v6 compatibility.
+import { useParams, useNavigate } from 'react-router-dom';
 import * as api from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { Quiz, CourseMaterial, Course, QuizAttempt } from '../../types';
+import { Quiz, Course, QuizAttempt, Question } from '../../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../../components/ui/Card';
-import { Button, buttonVariants } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { cn } from '../../lib/utils';
+import { Textarea } from '../../components/ui/Textarea';
 
-const QUIZ_DURATION_SECONDS = 300; // 5 minutes
-type QuizState = 'landing' | 'active' | 'finished';
+type QuizState = 'confirming' | 'active' | 'finished';
 
-interface NextQuizSuggestion {
-    text: string;
-    quiz?: Quiz;
-}
+// Icons
+const BookCopyIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 16V4a2 2 0 0 1 2-2h11"/><path d="M5 14H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-5"/><path d="M15 2h5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1"/><path d="M20 9.5V4a2 2 0 0 0-2-2h-3"/></svg>;
+const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+const AlertTriangleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+        <line x1="12" x2="12" y1="9" y2="13"/>
+        <line x1="12" x2="12.01" y1="17" y2="17"/>
+    </svg>
+);
+const CheckCircle2Icon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>;
+const XCircleIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+const BotIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>;
+const LoaderIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>;
+
 
 const StudentQuizView: React.FC = () => {
     const { quizId } = useParams<{ quizId: string }>();
     const { user } = useAuth();
+    // FIX: Replaced useHistory with useNavigate for react-router-dom v6.
     const navigate = useNavigate();
     
     const [quiz, setQuiz] = useState<Quiz | null>(null);
     const [course, setCourse] = useState<Course | null>(null);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<{ [questionId: string]: string }>({});
-    const [quizState, setQuizState] = useState<QuizState>('landing');
-    const [score, setScore] = useState(0);
+    const [quizState, setQuizState] = useState<QuizState>('confirming');
+    const [bestScore, setBestScore] = useState<{ score: number, total: number } | null>(null);
     const [finishedAttempt, setFinishedAttempt] = useState<QuizAttempt | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [timeRemaining, setTimeRemaining] = useState(QUIZ_DURATION_SECONDS);
-    const [nextQuizSuggestion, setNextQuizSuggestion] = useState<NextQuizSuggestion | null>(null);
+    const [timeElapsed, setTimeElapsed] = useState(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isConfirmSubmitOpen, setIsConfirmSubmitOpen] = useState(false);
+    const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(new Set());
+
+
+    // AI Feedback State
+    const [aiFeedbacks, setAiFeedbacks] = useState<Record<string, string>>({});
+    const [isFeedbackLoading, setIsFeedbackLoading] = useState<Record<string, boolean>>({});
 
     const timerRef = useRef<number | null>(null);
+    const startTimeRef = useRef<number | null>(null);
 
     useEffect(() => {
-        const fetchQuizAndCourse = async () => {
-            if (!quizId) return;
+        const fetchAndSetupQuiz = async () => {
+            if (!quizId || !user) return;
             setIsLoading(true);
             try {
                 const quizData = await api.getQuizById(quizId);
                 if (!quizData) {
-                    throw new Error("The quiz you are looking for could not be found. It may have been removed by the instructor.");
+                    throw new Error("The quiz you are looking for could not be found.");
                 }
                 setQuiz(quizData);
 
                 const courseData = await api.getCourseById(quizData.courseId);
                 if (!courseData) {
-                    throw new Error("Could not load the course details associated with this quiz.");
+                    throw new Error("Could not load the course details for this quiz.");
                 }
                 setCourse(courseData);
 
+                const attempts = await api.getStudentProgress(user.id);
+                const pastAttempts = attempts.filter(a => a.quizId === quizId);
+                if (pastAttempts.length > 0) {
+                    const best = pastAttempts.reduce((max, current) => (current.score > max.score ? current : max));
+                    setBestScore({ score: best.score, total: best.totalPoints });
+                }
+
             } catch (err: any) {
-                console.error("Failed to fetch quiz and course", err);
-                setError(err.message || "An unexpected error occurred while loading the quiz.");
+                console.error("Failed to fetch quiz data", err);
+                setError(err.message || "An unexpected error occurred.");
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchQuizAndCourse();
-    }, [quizId]);
+        fetchAndSetupQuiz();
+    }, [quizId, user]);
+
 
     // Timer logic
     useEffect(() => {
         if (quizState === 'active') {
+            startTimeRef.current = Date.now();
             timerRef.current = window.setInterval(() => {
-                setTimeRemaining(prev => prev - 1);
+                setTimeElapsed(Math.floor((Date.now() - (startTimeRef.current ?? 0)) / 1000));
             }, 1000);
+        } else {
+            if (timerRef.current) clearInterval(timerRef.current);
         }
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, [quizState]);
 
-    useEffect(() => {
-        if (timeRemaining <= 0 && quizState === 'active') {
-            handleSubmit(true); // Auto-submit when timer runs out
-        }
-    }, [timeRemaining, quizState]);
     
     useEffect(() => {
         const fetchLatestAttempt = async () => {
             if (quizState === 'finished' && user && quizId) {
-                // To display feedback, we need to get the latest version of the attempt
                 const allAttempts = await api.getStudentProgress(user.id);
                 const latestForThisQuiz = allAttempts
                     .filter(a => a.quizId === quizId)
@@ -99,25 +122,42 @@ const StudentQuizView: React.FC = () => {
         fetchLatestAttempt();
     }, [quizState, quizId, user]);
 
+    useEffect(() => {
+        if (quizState === 'active') {
+            setVisitedQuestions(prev => new Set(prev).add(currentQuestionIndex));
+        }
+    }, [currentQuestionIndex, quizState]);
+    
+    const handleFetchFeedback = async (question: Question) => {
+        if (aiFeedbacks[question.id]) return; // Don't re-fetch if already loaded
+
+        setIsFeedbackLoading(prev => ({ ...prev, [question.id]: true }));
+        try {
+            const feedbackText = await api.getAIFeedbackForQuestion(question);
+            setAiFeedbacks(prev => ({ ...prev, [question.id]: feedbackText }));
+        } catch (err) {
+            console.error("Failed to fetch AI feedback", err);
+            setAiFeedbacks(prev => ({ ...prev, [question.id]: "Sorry, an error occurred while generating the explanation." }));
+        } finally {
+            setIsFeedbackLoading(prev => ({ ...prev, [question.id]: false }));
+        }
+    };
+
 
     const handleAnswerChange = (questionId: string, answer: string) => {
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
     };
-
-    const handleNext = () => {
-        if (quiz && currentQuestionIndex < quiz.questions.length - 1) {
-            setCurrentQuestionIndex(prev => prev + 1);
-        }
-    };
     
-    const handlePrev = () => {
-        if (currentQuestionIndex > 0) {
-            setCurrentQuestionIndex(prev => prev - 1);
-        }
+    const handleStartQuiz = () => {
+        setQuizState('active');
+        setVisitedQuestions(new Set([0]));
     };
 
-    const handleSubmit = async (isAutoSubmit = false) => {
+
+    const handleSubmit = async () => {
         if (!quiz || !user || isSubmitting) return;
+        
+        setIsConfirmSubmitOpen(false);
         setIsSubmitting(true);
         if(timerRef.current) clearInterval(timerRef.current);
         
@@ -129,7 +169,6 @@ const StudentQuizView: React.FC = () => {
                 }
             });
             
-            setScore(calculatedScore); // Keep local score for immediate display
             const totalPoints = quiz.questions.reduce((sum, q) => sum + q.points, 0);
     
             const submittedAttempt = await api.submitQuizAttempt({
@@ -139,40 +178,8 @@ const StudentQuizView: React.FC = () => {
                 score: calculatedScore,
                 totalPoints,
             });
-            setFinishedAttempt(submittedAttempt); // Show the submitted version immediately
+            setFinishedAttempt(submittedAttempt);
             setQuizState('finished');
-    
-            if (isAutoSubmit) {
-                alert("Time's up! Your quiz has been submitted automatically.");
-            }
-    
-            // Adaptive learning suggestion logic
-            const percentage = totalPoints > 0 ? Math.round((calculatedScore / totalPoints) * 100) : 0;
-            const allCourseQuizzes = await api.getQuizzesByCourse(quiz.courseId);
-            
-            let suggestion: NextQuizSuggestion | null = null;
-    
-            if (percentage >= 80) {
-                let nextDifficulty: 'Intermediate' | 'Advanced' | null = null;
-                if (quiz.difficulty === 'Beginner') nextDifficulty = 'Intermediate';
-                if (quiz.difficulty === 'Intermediate') nextDifficulty = 'Advanced';
-    
-                if (nextDifficulty) {
-                    const nextQuiz = allCourseQuizzes.find(q => q.difficulty === nextDifficulty && q.id !== quiz.id);
-                    if (nextQuiz) {
-                        suggestion = { text: "Great job! You're ready for a bigger challenge.", quiz: nextQuiz };
-                    } else {
-                        suggestion = { text: "Excellent work! You've mastered this topic." };
-                    }
-                } else {
-                     suggestion = { text: "Excellent work! You've mastered this topic." };
-                }
-            } else if (percentage < 50) {
-                suggestion = { text: "It looks like this topic was a bit tricky. We recommend reviewing the course materials and trying again." };
-            } else {
-                suggestion = { text: "Good effort! A quick review of the material will help solidify your knowledge." };
-            }
-            setNextQuizSuggestion(suggestion);
         } catch(err) {
             console.error("Error submitting quiz", err);
             setError("Failed to submit quiz. Please try again.");
@@ -180,350 +187,359 @@ const StudentQuizView: React.FC = () => {
         }
     };
 
-    const handleRetakeQuiz = () => {
-        setCurrentQuestionIndex(0);
-        setAnswers({});
-        setScore(0);
-        setFinishedAttempt(null);
-        setTimeRemaining(QUIZ_DURATION_SECONDS);
-        setQuizState('landing');
-        setNextQuizSuggestion(null);
-    };
-
-    if (isLoading) return <div className="text-center p-8">Loading quiz...</div>;
+    if (isLoading) return <div className="text-center p-8 text-white">Loading quiz...</div>;
     if (error) return <div className="text-center p-8 text-red-600 font-semibold bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">{error}</div>;
-    if (!quiz || !course) return <div className="text-center p-8">Quiz data could not be fully loaded. Please try again later.</div>;
+    if (!quiz || !course) return <div className="text-center p-8 text-white">Quiz data could not be fully loaded.</div>;
 
     const currentQuestion = quiz.questions[currentQuestionIndex];
-    const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
-    const minutes = Math.floor(timeRemaining / 60);
-    const seconds = timeRemaining % 60;
+    const minutes = Math.floor(timeElapsed / 60).toString().padStart(2, '0');
+    const seconds = (timeElapsed % 60).toString().padStart(2, '0');
 
-    if (quizState === 'landing') {
+    if (quizState === 'confirming') {
+        const percentage = bestScore ? Math.round((bestScore.score / bestScore.total) * 100) : 0;
         return (
-            <div className="max-w-3xl mx-auto space-y-6">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="text-3xl">{quiz.title}</CardTitle>
-                        <CardDescription>From course: {course.title}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                         <div className="flex flex-wrap gap-4 text-sm">
-                            <div className="flex items-center gap-2"><Badge variant="secondary">{quiz.difficulty}</Badge></div>
-                            <div className="flex items-center gap-2"><FileQuestionIcon className="w-4 h-4 text-slate-500" /> {quiz.questions.length} Questions</div>
-                            <div className="flex items-center gap-2"><TimerIcon className="w-4 h-4 text-slate-500" /> {QUIZ_DURATION_SECONDS / 60} Minutes</div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                <div className="w-full max-w-md m-4 bg-[#1E293B] border border-slate-700 rounded-2xl text-white p-8 space-y-6 animate-in fade-in-0 zoom-in-95">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <BookCopyIcon className="w-8 h-8 text-violet-400" />
                         </div>
-                        <p>This quiz will test your knowledge on topics from the "{course.title}" course. Review the materials below before you begin.</p>
-                    </CardContent>
-                    <CardFooter>
-                        <Button className="w-full" size="lg" onClick={() => setQuizState('active')}>
-                            Start Quiz
-                        </Button>
-                    </CardFooter>
-                </Card>
-                {course.materials.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Course Materials</CardTitle>
-                        <CardDescription>Reference these materials to help you with the quiz.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ul className="space-y-3">
-                            {course.materials.map(material => (
-                                <li key={material.id}>
-                                    <a 
-                                        href={material.url} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="flex items-center gap-3 p-3 rounded-md border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                    >
-                                        {getMaterialIcon(material.type)}
-                                        <div>
-                                            <p className="font-semibold">{material.title}</p>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400 truncate max-w-sm">
-                                                {material.type === 'link' ? material.url : `Type: ${material.type.toUpperCase()}`}
-                                            </p>
-                                        </div>
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </CardContent>
-                </Card>
-            )}
+                        <h2 className="text-2xl font-bold">Ready to begin?</h2>
+                        <p className="text-slate-300 mt-1">{quiz.title}</p>
+                        <p className="text-xs text-slate-400">{course.title}</p>
+                    </div>
+                    <div className="space-y-3 text-sm border-t border-b border-slate-700 py-4">
+                        <div className="flex justify-between items-center"><span className="text-slate-300">Questions:</span> <span className="font-semibold">{quiz.questions.length}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-slate-300">Time Limit:</span> <span className="font-semibold">{quiz.duration ? `${quiz.duration} minutes` : 'None'}</span></div>
+                        <div className="flex justify-between items-center"><span className="text-slate-300">Your Best Score:</span> <span className={`font-semibold ${bestScore ? 'text-green-400' : ''}`}>{bestScore ? `${percentage}%` : 'N/A'}</span></div>
+                    </div>
+                    <p className="text-xs text-center text-slate-400">Once you begin, the timer (if applicable) will start and cannot be paused.</p>
+                    <div className="flex gap-4">
+                        <Button variant="outline" className="w-full" onClick={() => navigate('/student/quizzes')}>Go Back</Button>
+                        <Button className="w-full" onClick={handleStartQuiz}>Begin Quiz</Button>
+                    </div>
+                </div>
             </div>
         )
     }
 
     if (quizState === 'finished') {
-        const finalScore = finishedAttempt?.overriddenScore ?? finishedAttempt?.score ?? score;
+        const finalScore = finishedAttempt?.score ?? 0;
         const totalPoints = quiz.questions.reduce((sum, q) => sum + q.points, 0);
         const percentage = totalPoints > 0 ? Math.round((finalScore / totalPoints) * 100) : 0;
 
-        const getResultIcon = () => {
-            if (percentage >= 80) return <TrophyIcon className="w-16 h-16 text-yellow-500" />;
-            if (percentage < 50) return <RepeatIcon className="w-16 h-16 text-red-500" />;
-            return <ThumbsUpIcon className="w-16 h-16 text-blue-500" />;
-        };
-        const getResultTitle = () => {
-            if (percentage >= 80) return "Excellent Work!";
-            if (percentage < 50) return "Keep Practicing!";
-            return "Good Effort!";
-        };
-
-
         return (
-            <div className="max-w-3xl mx-auto space-y-6">
-                <Card>
-                    <CardHeader className="text-center items-center">
-                        {getResultIcon()}
-                        <CardTitle className="text-3xl">{getResultTitle()}</CardTitle>
+            <div className="max-w-4xl mx-auto space-y-6">
+                 <Card className="text-center">
+                    <CardHeader className="items-center">
+                        <CardTitle className="text-3xl">Quiz Complete!</CardTitle>
                         <CardDescription>You've finished the "{quiz.title}" quiz.</CardDescription>
                     </CardHeader>
-                    <CardContent className="text-center space-y-2">
+                    <CardContent className="space-y-2">
                         <p className="text-lg font-medium">Your Score:</p>
-                        <p className="text-5xl font-bold text-indigo-600 dark:text-indigo-400">
-                            {finalScore} / {totalPoints}
-                        </p>
-                        <p className="text-2xl text-slate-600 dark:text-slate-300">
-                           That's {percentage}%!
-                        </p>
+                        <p className="text-5xl font-bold text-indigo-600 dark:text-indigo-400">{finalScore} / {totalPoints}</p>
+                        <p className="text-2xl text-slate-600 dark:text-white">That's {percentage}%!</p>
                     </CardContent>
                 </Card>
-                
-                {finishedAttempt?.overallFeedback && (
-                    <Card className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <MessageSquareIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                                Instructor Feedback
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-slate-700 dark:text-slate-300 italic">"{finishedAttempt.overallFeedback}"</p>
-                        </CardContent>
-                    </Card>
-                )}
 
+                <PerformanceFeedbackCard percentage={percentage} />
 
-                {nextQuizSuggestion && !finishedAttempt?.overallFeedback && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>What's Next?</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p>{nextQuizSuggestion.text}</p>
-                            {nextQuizSuggestion.quiz && (
-                                <Link to={`/student/quiz/${nextQuizSuggestion.quiz.id}`} onClick={handleRetakeQuiz} className={cn(buttonVariants(), 'w-full')}>
-                                    Take: {nextQuizSuggestion.quiz.title} ({nextQuizSuggestion.quiz.difficulty})
-                                </Link>
-                            )}
-                        </CardContent>
-                    </Card>
-                )}
-
-
-                <h2 className="text-2xl font-bold">Question Breakdown</h2>
-
-                <div className="space-y-4">
-                    {quiz.questions.map((question, index) => {
-                        const userAnswer = finishedAttempt?.answers[question.id] || "Not Answered";
-                        const isCorrect = userAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim();
-                        
-                        return (
-                            <Card 
-                                key={question.id}
-                                className={cn(isCorrect 
-                                    ? 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-900/20' 
-                                    : 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-900/20'
-                                )}
-                            >
-                                <CardHeader>
-                                    <div className="flex justify-between items-start gap-4">
-                                        <p className="font-semibold text-slate-800 dark:text-slate-200 flex-1">{index + 1}. {question.question}</p>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Detailed Review</CardTitle>
+                        <CardDescription>Review your answers and see explanations for each question.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {quiz.questions.map((q, index) => {
+                            const studentAnswer = finishedAttempt?.answers[q.id] || "Not Answered";
+                            const isCorrect = studentAnswer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+                            return (
+                                <Card key={q.id} className={cn("overflow-hidden", isCorrect ? 'border-green-300 dark:border-green-800' : 'border-red-300 dark:border-red-800')}>
+                                    <CardHeader className="flex flex-row justify-between items-start pb-2">
+                                        <div>
+                                            <CardTitle className="text-lg leading-tight">Question {index + 1}</CardTitle>
+                                            <p className="mt-2 font-medium">{q.question}</p>
+                                        </div>
                                         {isCorrect ? (
-                                            <Badge variant="success" className="whitespace-nowrap">
-                                                <CheckIcon className="w-3.5 h-3.5 mr-1.5" />
-                                                Correct
-                                            </Badge>
+                                            <CheckCircle2Icon className="w-6 h-6 text-green-500 shrink-0" />
                                         ) : (
-                                            <Badge variant="destructive" className="whitespace-nowrap">
-                                                <XIcon className="w-3.5 h-3.5 mr-1.5" />
-                                                Incorrect
-                                            </Badge>
+                                            <XCircleIcon className="w-6 h-6 text-red-500 shrink-0" />
                                         )}
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-2 text-sm pt-4">
-                                    <div className="flex items-start gap-2">
-                                        <span className="font-medium text-slate-500 dark:text-slate-400 w-28 shrink-0">Your Answer:</span>
-                                        <span className={`flex-1 font-semibold ${isCorrect ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                                            {userAnswer}
-                                        </span>
-                                    </div>
-                                    {!isCorrect && (
-                                        <div className="flex items-start gap-2">
-                                            <span className="font-medium text-slate-500 dark:text-slate-400 w-28 shrink-0">Correct Answer:</span>
-                                            <span className="flex-1 font-semibold text-green-700 dark:text-green-400">
-                                                {question.correctAnswer}
-                                            </span>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        <div className={cn("p-2 rounded-md text-sm", isCorrect ? "bg-green-50 dark:bg-green-900/20" : "bg-red-50 dark:bg-red-900/20")}>
+                                            <strong>Your Answer:</strong> {studentAnswer}
                                         </div>
-                                    )}
-                                </CardContent>
-                                {finishedAttempt?.feedback?.[question.id] && (
-                                    <CardFooter className="bg-amber-50/50 dark:bg-amber-900/10 border-t dark:border-slate-800 py-3 px-6">
-                                        <div className="flex items-start gap-2 text-sm">
-                                            <MessageSquareIcon className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
-                                            <p className="text-slate-600 dark:text-slate-300"><strong className="font-medium">Feedback:</strong> {finishedAttempt.feedback[question.id]}</p>
-                                        </div>
-                                    </CardFooter>
-                                )}
-                            </Card>
-                        );
-                    })}
-                </div>
+                                        {!isCorrect && (
+                                            <div className="p-2 rounded-md text-sm bg-slate-100 dark:bg-slate-800/50">
+                                                <strong>Correct Answer:</strong> {q.correctAnswer}
+                                            </div>
+                                        )}
 
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    {percentage < 80 && (
-                        <Button onClick={handleRetakeQuiz} variant="outline" className="w-full">
-                            Retake Quiz
-                        </Button>
-                    )}
-                    <Button onClick={() => navigate('/student/quizzes')} className="w-full">
-                        Back to Quizzes
-                    </Button>
+                                        {aiFeedbacks[q.id] ? (
+                                             <div className="pt-3">
+                                                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2 text-slate-500 dark:text-slate-300">
+                                                    <BotIcon className="w-4 h-4" />
+                                                    Explanation
+                                                </h4>
+                                                <div className="text-sm p-3 bg-slate-100 dark:bg-slate-800 rounded-md whitespace-pre-wrap">
+                                                    {aiFeedbacks[q.id]}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                             <div className="pt-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleFetchFeedback(q)}
+                                                    disabled={isFeedbackLoading[q.id]}
+                                                    className="text-indigo-600 dark:text-indigo-400"
+                                                >
+                                                    {isFeedbackLoading[q.id] ? (
+                                                        <>
+                                                            <LoaderIcon className="w-4 h-4 mr-2" />
+                                                            Generating Explanation...
+                                                        </>
+                                                    ) : (
+                                                        'Show Explanation'
+                                                    )}
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+                    </CardContent>
+                </Card>
+
+                <div className="flex justify-center">
+                     <Button onClick={() => navigate('/student/quizzes')} className="w-full max-w-xs">Back to Quizzes</Button>
                 </div>
             </div>
         );
     }
     
     return (
-        <div className="max-w-2xl mx-auto">
-            <Card>
-                <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <CardTitle>{quiz.title}</CardTitle>
-                        <Badge
-                            variant={timeRemaining < 60 ? 'destructive' : 'secondary'}
-                            className={cn(
-                                'tabular-nums text-sm px-3 py-1.5 transition-all duration-500', // Make it larger and use monospaced numbers
-                                timeRemaining < 60 && 'animate-pulse font-bold' // Add pulse animation and bold text when time is low
-                            )}
-                        >
-                            <TimerIcon className="w-4 h-4 mr-1.5" />
-                            {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
-                        </Badge>
-                    </div>
-                    <div className="flex justify-between items-center text-sm text-slate-500 dark:text-slate-400">
-                        <span>Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
-                        <span className="font-semibold">{Math.round(progress)}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                        <div
-                            className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
-                            style={{ width: `${progress}%` }}
-                            role="progressbar"
-                            aria-valuenow={Math.round(progress)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label="Quiz progress"
-                        ></div>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div>
-                        <p className="font-semibold text-lg mb-4">{currentQuestion.question}</p>
-                        <div className="space-y-3">
-                        {currentQuestion.type === 'multiple-choice' && currentQuestion.options?.map(option => (
-                            <label key={option} className="flex items-center p-3 rounded-md border border-slate-200 dark:border-slate-700 cursor-pointer has-[:checked]:bg-indigo-50 has-[:checked]:border-indigo-500 dark:has-[:checked]:bg-indigo-900/50">
-                                <input
-                                    type="radio"
-                                    name={currentQuestion.id}
-                                    value={option}
-                                    checked={answers[currentQuestion.id] === option}
-                                    onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-                                    className="w-4 h-4 mr-3"
-                                />
-                                {option}
-                            </label>
-                        ))}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            {/* Left side: Main quiz content */}
+            <div className="lg:col-span-2 space-y-6">
+                 <div>
+                    <h1 className="text-2xl font-bold text-white">{quiz.title}</h1>
+                    <p className="text-slate-300">{course.title}</p>
+                </div>
+                <div className="space-y-4">
+                    <p className="font-semibold text-lg text-slate-200">{currentQuestionIndex + 1}. {currentQuestion.question}</p>
+                    <div className="space-y-3">
+                        {currentQuestion.type === 'multiple-choice' && currentQuestion.options?.map((option, index) => {
+                            const isSelected = answers[currentQuestion.id] === option;
+                            const letter = String.fromCharCode(65 + index);
+                            return (
+                                <button 
+                                    key={option} 
+                                    className={cn(
+                                        "flex w-full text-left items-center p-4 rounded-lg border-2 transition-colors",
+                                        isSelected 
+                                            ? "bg-violet-900/50 border-violet-500" 
+                                            : "bg-slate-800/50 border-slate-700 hover:border-violet-600"
+                                    )}
+                                    onClick={() => handleAnswerChange(currentQuestion.id, option)}
+                                >
+                                    <span className={cn("flex items-center justify-center w-6 h-6 rounded-md border text-xs font-bold mr-4", isSelected ? "border-violet-500 text-violet-300" : "border-slate-600 text-slate-400")}>{letter}</span>
+                                    <span className="text-slate-200">{option}</span>
+                                </button>
+                            );
+                        })}
                         {currentQuestion.type === 'short-answer' && (
-                            <Input
-                                type="text"
-                                placeholder="Your answer..."
-                                value={answers[currentQuestion.id] || ''}
-                                onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-                            />
+                            <div>
+                                <label htmlFor="short-answer-input" className="sr-only">Your Answer</label>
+                                <Textarea
+                                    id="short-answer-input"
+                                    className="bg-slate-800/50 border-slate-700 text-slate-200"
+                                    placeholder="Type your answer here..."
+                                    rows={5}
+                                    value={answers[currentQuestion.id] || ''}
+                                    onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                                />
+                            </div>
                         )}
+                    </div>
+                </div>
+
+                <div className="bg-[#1E293B] border border-slate-700 rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                            disabled={currentQuestionIndex === 0}>
+                                Previous
+                        </Button>
+                        <p className="text-slate-300">Question {currentQuestionIndex + 1} of {quiz.questions.length}</p>
+                        {currentQuestionIndex === quiz.questions.length - 1 ? (
+                            <Button
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => setIsConfirmSubmitOpen(true)}
+                                disabled={isSubmitting}
+                            >
+                                Submit
+                            </Button>
+                        ) : (
+                            <Button 
+                                onClick={() => setCurrentQuestionIndex(prev => Math.min(quiz.questions.length - 1, prev + 1))}
+                            >
+                                Next
+                            </Button>
+                        )}
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div className="bg-violet-600 h-2 rounded-full" style={{ width: `${((currentQuestionIndex + 1) / quiz.questions.length) * 100}%` }}></div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Right side: Timer and Question Map */}
+            <div className="lg:sticky lg:top-8 space-y-6">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+                    <div className="flex items-center justify-center gap-2 text-slate-300 mb-2">
+                        <ClockIcon className="w-5 h-5" />
+                        <span className="text-sm font-medium">Time Elapsed</span>
+                    </div>
+                    <p className="text-4xl font-bold tabular-nums text-white">{minutes}:{seconds}</p>
+                </div>
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+                    <h3 className="font-semibold text-white mb-4">Question Map</h3>
+                    <div className="grid grid-cols-5 gap-2">
+                        {quiz.questions.map((q, index) => {
+                            const isAnswered = answers[q.id] !== undefined && answers[q.id].trim() !== '';
+                            const hasBeenVisited = visitedQuestions.has(index);
+                            const isSkipped = hasBeenVisited && !isAnswered && currentQuestionIndex !== index;
+                            
+                            return (
+                                <button
+                                    key={q.id}
+                                    onClick={() => setCurrentQuestionIndex(index)}
+                                    className={cn(
+                                        "flex items-center justify-center h-10 rounded-md border font-bold text-sm transition-colors",
+                                        currentQuestionIndex === index 
+                                            ? "bg-violet-600 border-violet-500 text-white ring-2 ring-offset-2 ring-offset-slate-800 ring-violet-500"
+                                            : isAnswered 
+                                                ? "bg-green-800 border-green-700 text-green-200"
+                                                : isSkipped
+                                                    ? "bg-yellow-800 border-yellow-700 text-yellow-200"
+                                                    : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700"
+                                    )}
+                                    title={
+                                        currentQuestionIndex === index ? 'Current' :
+                                        isAnswered ? 'Answered' :
+                                        isSkipped ? 'Skipped' : 'Not Visited'
+                                    }
+                                >
+                                    {index + 1}
+                                </button>
+                            );
+                        })}
+                    </div>
+                     <div className="mt-4 space-y-2 text-xs text-slate-400">
+                        <h4 className="font-semibold text-sm text-white mb-2">Legend</h4>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-800 border border-green-700"></div>Answered</div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-800 border border-yellow-700"></div>Skipped</div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-800 border border-slate-700"></div>Not Visited</div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-violet-600 border border-violet-500"></div>Current</div>
                         </div>
                     </div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                    <Button variant="outline" onClick={handlePrev} disabled={currentQuestionIndex === 0}>Previous</Button>
-                    {currentQuestionIndex === quiz.questions.length - 1 ? (
-                        <Button onClick={() => handleSubmit(false)} disabled={isSubmitting}>
-                            {isSubmitting ? 'Submitting...' : 'Submit'}
-                        </Button>
-                    ) : (
-                        <Button onClick={handleNext}>Next</Button>
-                    )}
-                </CardFooter>
-            </Card>
+                </div>
+                <Button onClick={() => setIsConfirmSubmitOpen(true)} disabled={isSubmitting} className="w-full bg-green-600 hover:bg-green-700 text-white text-base py-3 h-auto">
+                    {isSubmitting ? 'Submitting...' : 'Submit Quiz'}
+                </Button>
+            </div>
+
+            {isConfirmSubmitOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div className="w-full max-w-md m-4 bg-[#1E293B] border border-slate-700 rounded-2xl text-white p-8 space-y-6 animate-in fade-in-0 zoom-in-95">
+                        <div className="text-center">
+                            <div className="w-16 h-16 bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <AlertTriangleIcon className="w-8 h-8 text-yellow-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold">Confirm Submission</h2>
+                            <p className="text-slate-300 mt-1">Are you sure you want to submit your answers? This action cannot be undone.</p>
+                        </div>
+                        <div className="flex gap-4 pt-4">
+                            <Button variant="outline" className="w-full" onClick={() => setIsConfirmSubmitOpen(false)} disabled={isSubmitting}>
+                                Cancel
+                            </Button>
+                            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleSubmit} disabled={isSubmitting}>
+                                {isSubmitting ? 'Submitting...' : 'Yes, Submit Quiz'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-const getMaterialIcon = (type: CourseMaterial['type']) => {
-    switch(type) {
-        case 'link': return <LinkIcon className="w-6 h-6 text-blue-500 shrink-0" />;
-        case 'pdf': return <FileTextIcon className="w-6 h-6 text-red-500 shrink-0" />;
-        case 'video': return <VideoIcon className="w-6 h-6 text-purple-500 shrink-0" />;
-        default: return null;
+
+const TrophyIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+);
+
+const BookOpenIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+);
+
+
+const PerformanceFeedbackCard: React.FC<{ percentage: number }> = ({ percentage }) => {
+    let feedback: { message: string; description: string; icon: React.ReactNode; bgClass: string; };
+
+    if (percentage >= 90) {
+        feedback = {
+            message: "Excellent Work!",
+            description: "You have a strong grasp of the material. Keep up the great momentum!",
+            icon: <TrophyIcon className="w-8 h-8 text-yellow-500" />,
+            bgClass: "from-green-50 via-yellow-50 to-green-50 dark:from-green-950/50 dark:via-yellow-950/50 dark:to-green-950/50 border-green-200 dark:border-green-800"
+        };
+    } else if (percentage >= 75) {
+        feedback = {
+            message: "Great Job!",
+            description: "You're doing very well. A quick review of any missed questions will solidify your knowledge.",
+            icon: <TrophyIcon className="w-8 h-8 text-green-500" />,
+            bgClass: "from-green-50 to-blue-50 dark:from-green-950/50 dark:to-blue-950/50 border-green-200 dark:border-green-800"
+        };
+    } else if (percentage >= 60) {
+        feedback = {
+            message: "Good Work!",
+            description: "A solid performance. Focus on the areas where you lost points to improve further.",
+            icon: <CheckCircle2Icon className="w-8 h-8 text-blue-500" />,
+            bgClass: "from-blue-50 to-slate-50 dark:from-blue-950/50 dark:to-slate-900/50 border-blue-200 dark:border-blue-800"
+        };
+    } else if (percentage >= 40) {
+        feedback = {
+            message: "Keep Trying, You're Getting There.",
+            description: "Some concepts seem tricky. It's a good idea to review the course materials for this topic.",
+            icon: <BookOpenIcon className="w-8 h-8 text-orange-500" />,
+            bgClass: "from-yellow-50 to-orange-50 dark:from-yellow-950/50 dark:to-orange-950/50 border-yellow-200 dark:border-yellow-800"
+        };
+    } else {
+        feedback = {
+            message: "Don't Give Up, Review and Retry.",
+            description: "This quiz was tough. Re-watching the videos and reading the materials will make a big difference for your next attempt.",
+            icon: <XCircleIcon className="w-8 h-8 text-red-500" />,
+            bgClass: "from-red-50 to-orange-50 dark:from-red-950/50 dark:to-orange-950/50 border-red-200 dark:border-red-800"
+        };
     }
+
+    return (
+        <Card className={cn("bg-gradient-to-r", feedback.bgClass)}>
+            <CardHeader className="flex flex-row items-center gap-4">
+                <div className="shrink-0">{feedback.icon}</div>
+                <div>
+                    <CardTitle>{feedback.message}</CardTitle>
+                    <CardDescription className="mt-1">{feedback.description}</CardDescription>
+                </div>
+            </CardHeader>
+        </Card>
+    );
 }
-
-// Icons
-const MessageSquareIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-);
-const LinkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path>
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path>
-    </svg>
-);
-const FileTextIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-);
-const VideoIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m22 8-6 4 6 4V8Z"></path>
-        <rect width="14" height="12" x="2" y="6" rx="2" ry="2"></rect>
-    </svg>
-);
-const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-const XIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-const TimerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 12 16 14"></polyline>
-    </svg>
-);
-const FileQuestionIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M10 10.3c.2-.4.5-.8.9-1a2.1 2.1 0 0 1 2.6.4c.3.4.5.8.5 1.3 0 1.3-2 2-2 2"/><path d="M12 17h.01"/></svg>
-);
-const TrophyIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>;
-const RepeatIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.6A9 9 0 0 1 12 3a9 9 0 0 1 9 9"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 11.4A9 9 0 0 1 12 21a9 9 0 0 1-9-9"/></svg>;
-const ThumbsUpIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3 3 0 0 1 3 3z"/></svg>;
-
 
 export default StudentQuizView;

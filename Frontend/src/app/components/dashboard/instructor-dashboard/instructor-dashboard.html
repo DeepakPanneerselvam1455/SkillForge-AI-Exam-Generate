@@ -1,0 +1,130 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <div class="header-content">
+      <h1>Instructor Dashboard</h1>
+      <div class="user-info">
+        <span>Welcome, {{ user?.name }}!</span>
+        <button (click)="logout()" class="logout-btn">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="dashboard-nav">
+    <div class="nav-content">
+      <a routerLink="/dashboard/instructor" routerLinkActive="active" class="nav-item">
+        <i class="icon">📊</i>
+        Overview
+      </a>
+      <a routerLink="/dashboard/instructor/courses" routerLinkActive="active" class="nav-item">
+        <i class="icon">📚</i>
+        My Courses
+      </a>
+      <a routerLink="/dashboard/instructor/upload" routerLinkActive="active" class="nav-item">
+        <i class="icon">⬆️</i>
+        Upload Content
+      </a>
+      <a routerLink="/dashboard/instructor/students" routerLinkActive="active" class="nav-item">
+        <i class="icon">👥</i>
+        Students
+      </a>
+      <a routerLink="/dashboard/instructor/profile" routerLinkActive="active" class="nav-item">
+        <i class="icon">👤</i>
+        Profile
+      </a>
+    </div>
+  </nav>
+
+  <main class="dashboard-main">
+    <div class="dashboard-content">
+      <div class="welcome-section">
+        <h2>Welcome to Your Teaching Hub!</h2>
+        <p>Manage your courses and track student progress.</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📚</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.totalCourses || 0 }}</h3>
+            <p>Total Courses</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">❓</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.totalQuizzes || 0 }}</h3>
+            <p>Total Quizzes</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-content">
+            <h3>{{ dashboardData?.totalStudents || 0 }}</h3>
+            <p>Total Students</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="course-upload-tools">
+        <h3>Course Upload Tools</h3>
+        <div class="tools-grid">
+          <div *ngFor="let tool of dashboardData?.courseUploadTools" class="tool-card">
+            <div class="tool-icon">🛠️</div>
+            <h4>{{ tool }}</h4>
+            <p>Access powerful tools to create and manage your educational content.</p>
+            <button class="tool-btn">Access Tool</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-actions">
+        <h3>Quick Actions</h3>
+        <div class="actions-grid">
+          <button class="action-btn primary">
+            <i class="icon">➕</i>
+            Create New Course
+          </button>
+          <button class="action-btn secondary">
+            <i class="icon">📝</i>
+            Create Quiz
+          </button>
+          <button class="action-btn secondary">
+            <i class="icon">📊</i>
+            View Analytics
+          </button>
+          <button class="action-btn secondary">
+            <i class="icon">📋</i>
+            Manage Assignments
+          </button>
+        </div>
+      </div>
+
+      <div class="recent-activity">
+        <h3>Recent Activity</h3>
+        <div class="activity-list">
+          <div class="activity-item">
+            <div class="activity-icon">📚</div>
+            <div class="activity-content">
+              <h4>Created "Advanced JavaScript" Course</h4>
+              <p>2 hours ago</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon">❓</div>
+            <div class="activity-content">
+              <h4>Published React Quiz</h4>
+              <p>1 day ago</p>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon">👥</div>
+            <div class="activity-content">
+              <h4>25 students enrolled in Web Development</h4>
+              <p>3 days ago</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

@@ -1,5 +1,5 @@
-import { User, Course, Quiz, Question, QuizAttempt, QuizAssignment, CourseMaterial } from '../types';
-import { GoogleGenAI, Type } from "@google/genai";
+import { User, Course, Quiz, Question, QuizAttempt, QuizAssignment, CourseMaterial, ChatMessage as AppChatMessage } from '../types';
+import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { logActivity } from './activityLog';
 
 // --- MOCK DATABASE (LocalStorage) ---
@@ -48,7 +48,6 @@ export const initMockData = () => {
             instructorName: 'Instructor Smith',
             institutionName: 'SkillForge Academy',
             publishDate: now.split('T')[0],
-            courseType: 'Youtube',
             language: 'English',
             topics: ['Variables', 'Functions', 'Arrays', 'Objects'], 
             materials: [
@@ -66,7 +65,6 @@ export const initMockData = () => {
             instructorName: 'Instructor Smith',
             institutionName: 'SkillForge Academy',
             publishDate: now.split('T')[0],
-            courseType: 'Youtube',
             language: 'English',
             topics: ['Hooks', 'Context API', 'Performance', 'Render Props'], 
             materials: [], 
@@ -83,6 +81,7 @@ export const initMockData = () => {
             difficulty: 'Beginner',
             createdBy: mentorId,
             createdAt: now,
+            duration: 5,
             questions: [
                 { id: 'q1', type: 'multiple-choice', question: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const', points: 10 },
                 { id: 'q2', type: 'short-answer', question: 'What is the data type of `null` in JavaScript?', correctAnswer: 'object', points: 10 },
@@ -154,10 +153,18 @@ const getById = async <T extends { id: string },>(key: string, id: string): Prom
     return delay(items.find(item => item.id === id) || null);
 };
 const create = async <T extends { id: string },>(key: string, item: T): Promise<T> => {
-    const items = await getAll<T>(key);
-    items.push(item);
-    localStorage.setItem(key, JSON.stringify(items));
-    return delay(item);
+    try {
+        const items = await getAll<T>(key);
+        items.push(item);
+        localStorage.setItem(key, JSON.stringify(items));
+        return delay(item);
+    } catch (e) {
+        console.error(`Failed to create item in ${key}:`, e);
+        if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+            throw new Error("Could not save the data. Your browser's local storage is full. Please clear some space and try again.");
+        }
+        throw new Error("An unexpected local storage error occurred. Please ensure your browser supports local storage.");
+    }
 };
 const update = async <T extends { id: string },>(key: string, updatedItem: T): Promise<T> => {
     let items = await getAll<T>(key);
@@ -258,25 +265,12 @@ export const resetPassword = async (userId: string, newPassword: string) => {
 // Courses
 export const getCourses = () => getAll<Course>(DB.courses);
 export const getCourseById = (courseId: string) => getById<Course>(DB.courses, courseId);
-export const createCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'materials' | 'topics'> & { videoID: string }) => {
-    const { videoID, ...restOfData } = courseData;
-    
-    const newMaterials: CourseMaterial[] = [];
-    if (videoID && restOfData.courseType === 'Youtube') {
-        newMaterials.push({
-            id: `mat-${Date.now()}`,
-            type: 'video',
-            title: `${restOfData.title} Video`,
-            url: `https://www.youtube.com/watch?v=${videoID}`
-        });
-    }
-
+export const createCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'topics'>) => {
     const newCourse: Course = {
-        ...restOfData,
+        ...courseData,
         id: `course-${Date.now()}`,
         createdAt: new Date().toISOString(),
         topics: [], // Topics are not added at creation from this form
-        materials: newMaterials,
     };
 
     logActivity('course_create', `Course "${newCourse.title}" published by ${newCourse.instructorName}.`, { courseId: newCourse.id, mentorId: newCourse.mentorId });
@@ -311,6 +305,27 @@ export const createQuiz = async (quizData: Omit<Quiz, 'id' | 'createdAt'>) => {
     return create(DB.quizzes, newQuiz);
 };
 export const updateQuiz = (updatedQuiz: Quiz) => update<Quiz>(DB.quizzes, updatedQuiz);
+export const deleteQuiz = async (quizId: string) => {
+    // Log before deleting to get quiz info
+    const quiz = await getQuizById(quizId);
+    if (quiz) {
+        logActivity('quiz_delete', `Quiz "${quiz.title}" was deleted.`, { quizId: quiz.id, courseId: quiz.courseId });
+    }
+
+    // Remove associated attempts
+    let attempts = await getAll<QuizAttempt>(DB.attempts);
+    attempts = attempts.filter(a => a.quizId !== quizId);
+    localStorage.setItem(DB.attempts, JSON.stringify(attempts));
+
+    // Remove associated assignments
+    let assignments = await getAll<QuizAssignment>(DB.assignments);
+    assignments = assignments.filter(a => a.quizId !== quizId);
+    localStorage.setItem(DB.assignments, JSON.stringify(assignments));
+
+    // Remove the quiz itself
+    return remove(DB.quizzes, quizId);
+};
+
 
 // Quiz Attempts
 export const submitQuizAttempt = async (attemptData: Omit<QuizAttempt, 'id' | 'submittedAt'>) => {
@@ -347,7 +362,7 @@ export const getAllAttempts = () => getAll<QuizAttempt>(DB.attempts);
 export const updateQuizAttempt = (updatedAttempt: QuizAttempt) => update<QuizAttempt>(DB.attempts, updatedAttempt);
 
 // --- Quiz Assignments ---
-export const createQuizAssignments = async (quizId: string, studentIds: string[]): Promise<QuizAssignment[]> => {
+export const createQuizAssignments = async (quizId: string, studentIds: string[], dueDate?: string): Promise<QuizAssignment[]> => {
     const allAssignments = await getAll<QuizAssignment>(DB.assignments);
     const newAssignments: QuizAssignment[] = [];
 
@@ -360,6 +375,7 @@ export const createQuizAssignments = async (quizId: string, studentIds: string[]
                 quizId,
                 studentId,
                 assignedAt: new Date().toISOString(),
+                dueDate,
             };
             newAssignments.push(newAssignment);
         }
@@ -376,10 +392,11 @@ export const createQuizAssignments = async (quizId: string, studentIds: string[]
 export const getAssignedQuizzesForStudent = async (studentId: string) => {
     const allAssignments = await getAll<QuizAssignment>(DB.assignments);
     const studentAssignments = allAssignments.filter(a => a.studentId === studentId);
-    const assignedQuizIds = new Set(studentAssignments.map(a => a.quizId));
+    const assignmentsMap = new Map(studentAssignments.map(a => [a.quizId, a]));
+    const assignedQuizIds = Array.from(assignmentsMap.keys());
 
     const allQuizzes = await getQuizzes();
-    const studentQuizzes = allQuizzes.filter(q => assignedQuizIds.has(q.id));
+    const studentQuizzes = allQuizzes.filter(q => assignedQuizIds.includes(q.id));
 
     const courses = await getCourses();
     const coursesMap = courses.reduce((acc, course) => {
@@ -387,10 +404,14 @@ export const getAssignedQuizzesForStudent = async (studentId: string) => {
         return acc;
     }, {} as { [id: string]: string });
 
-    return delay(studentQuizzes.map(quiz => ({
-        ...quiz,
-        courseTitle: coursesMap[quiz.courseId] || 'Unknown Course',
-    })));
+    return delay(studentQuizzes.map(quiz => {
+        const assignment = assignmentsMap.get(quiz.id);
+        return {
+            ...quiz,
+            courseTitle: coursesMap[quiz.courseId] || 'Unknown Course',
+            dueDate: assignment?.dueDate,
+        };
+    }));
 };
 
 export const getAssignedCoursesForStudent = async (studentId: string): Promise<Course[]> => {
@@ -403,10 +424,96 @@ export const getAssignedCoursesForStudent = async (studentId: string): Promise<C
 
 
 // --- AI QUIZ GENERATION ---
-export const generateQuizQuestions = async (topic: string, difficulty: string, numQuestions: number): Promise<Question[]> => {
-    const prompt = `Generate ${numQuestions} quiz questions about "${topic}" for a learning platform. The difficulty level should be "${difficulty}". 
-    Include a mix of multiple-choice and short-answer questions. For multiple-choice, provide 4 options. 
-    Ensure the response strictly follows the provided JSON schema.`;
+const getGeminiError = (error: unknown, context: string): Error => {
+    console.error(`Error during Gemini API call (${context}):`, error);
+    let message = `An unexpected error occurred while ${context}. Please try again.`;
+
+    if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('api key')) {
+            message = `API Key Invalid or Missing. Please ensure your Gemini API key is configured correctly and has the necessary permissions.`;
+        } else if (errorMessage.includes('quota')) {
+            message = `You have exceeded your API quota for today. Please check your usage limits and try again later.`;
+        } else if (errorMessage.includes('safety')) {
+            message = `Your request was blocked for safety reasons. Please adjust your input topic or learning objectives and try again.`;
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            message = `A network error occurred while contacting the AI service. Please check your internet connection.`;
+        } else if (errorMessage.includes('400')) {
+             message = `The AI model could not understand the request. Please check if your topics are clear and try again.`;
+        } else if (errorMessage.includes('500') || errorMessage.includes('503')) {
+            message = `The AI service is temporarily unavailable. Please try again in a few moments.`;
+        } else {
+            message = `The AI service failed to ${context}. If this persists, the service may be down.`;
+        }
+    }
+    
+    return new Error(message);
+};
+
+export const generateQuizQuestions = async (topics: string, learningObjectives: string, difficulty: string, numQuestions: number, questionType: 'mixed' | 'multiple-choice' = 'mixed'): Promise<Question[]> => {
+    
+    let prompt: string;
+    let responseSchema: any;
+
+    let basePrompt = `Generate ${numQuestions} quiz questions about the topic(s): "${topics}". The difficulty should be "${difficulty}".`;
+    if (learningObjectives) {
+        basePrompt += ` The questions should assess these learning objectives: "${learningObjectives}".`;
+    }
+
+    if (questionType === 'multiple-choice') {
+        prompt = `${basePrompt} All questions must be multiple-choice. For each question, provide 4 options. Ensure the response strictly follows the provided JSON schema.`;
+        
+        responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                questions: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            type: { type: Type.STRING, enum: ['multiple-choice'], description: 'The type of question.' },
+                            question: { type: Type.STRING, description: 'The question text.' },
+                            options: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                description: 'An array of 4 possible answers for the multiple-choice question.'
+                            },
+                            correctAnswer: { type: Type.STRING, description: 'The correct answer.' },
+                            points: { type: Type.INTEGER, description: 'Points awarded for a correct answer, typically 10.' },
+                        },
+                        required: ['type', 'question', 'options', 'correctAnswer', 'points'],
+                    }
+                }
+            }
+        };
+
+    } else { // 'mixed'
+        prompt = `${basePrompt} Include a mix of multiple-choice and short-answer questions. For multiple-choice, provide 4 options. Ensure the response strictly follows the provided JSON schema.`;
+
+        responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                questions: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            type: { type: Type.STRING, enum: ['multiple-choice', 'short-answer'], description: 'The type of question.' },
+                            question: { type: Type.STRING, description: 'The question text.' },
+                            options: {
+                                type: Type.ARRAY,
+                                items: { type: Type.STRING },
+                                description: 'An array of 4 possible answers for multiple-choice questions. Omit for short-answer.'
+                            },
+                            correctAnswer: { type: Type.STRING, description: 'The correct answer.' },
+                            points: { type: Type.INTEGER, description: 'Points awarded for a correct answer, typically 10.' },
+                        },
+                        required: ['type', 'question', 'correctAnswer', 'points'],
+                    }
+                }
+            }
+        };
+    }
 
     try {
         const response = await ai.models.generateContent({
@@ -414,29 +521,7 @@ export const generateQuizQuestions = async (topic: string, difficulty: string, n
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        questions: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING, enum: ['multiple-choice', 'short-answer'], description: 'The type of question.' },
-                                    question: { type: Type.STRING, description: 'The question text.' },
-                                    options: {
-                                        type: Type.ARRAY,
-                                        items: { type: Type.STRING },
-                                        description: 'An array of 4 possible answers for multiple-choice questions. Omit for short-answer.'
-                                    },
-                                    correctAnswer: { type: Type.STRING, description: 'The correct answer.' },
-                                    points: { type: Type.INTEGER, description: 'Points awarded for a correct answer, typically 10.' },
-                                },
-                                required: ['type', 'question', 'correctAnswer', 'points'],
-                            }
-                        }
-                    }
-                },
+                responseSchema: responseSchema,
             },
         });
 
@@ -450,22 +535,218 @@ export const generateQuizQuestions = async (topic: string, difficulty: string, n
         }));
 
     } catch (error) {
-        console.error("Error generating quiz questions with Gemini:", error);
-        throw new Error("Failed to generate quiz questions. Please check your API key and try again.");
+        throw getGeminiError(error, 'generating quiz questions');
     }
 };
 
-// --- AI ADAPTIVE LEARNING ---
-export const getLearningSuggestion = async (courseTitle: string, quizTitle: string, score: number, totalPoints: number): Promise<string> => {
-    const percentage = Math.round((score / totalPoints) * 100);
-    const performance = percentage >= 80 ? 'well' : (percentage >= 50 ? 'okay' : 'poorly');
+export const improveQuestionWithAI = async (question: Question, quiz: Quiz): Promise<Partial<Question>> => {
+    const prompt = `You are an expert curriculum developer. Your task is to improve a quiz question.
+The quiz difficulty is "${quiz.difficulty}". The quiz title is "${quiz.title}".
 
-    const prompt = `A student performed ${performance} on the "${quizTitle}" quiz for the course "${courseTitle}", scoring ${percentage}%. 
-    Based on this, provide a short, encouraging learning suggestion.
-    - If they did poorly, suggest they review the course materials and retry the quiz.
-    - If they did okay, praise their effort and suggest a quick review of missed topics before moving on.
-    - If they did well, congratulate them and recommend they start the next topic or a more challenging quiz.
-    Keep the response to 2-3 sentences.`;
+Here is the current question:
+Type: ${question.type}
+Question: "${question.question}"
+${question.type === 'multiple-choice' ? `Options: ${question.options?.join(', ')}` : ''}
+Correct Answer: "${question.correctAnswer}"
+
+Improve the question for clarity, accuracy, and effectiveness based on the context. If it is multiple choice, also improve the options to be more effective distractors. The new options should not change the correct answer.
+
+Return the response as a JSON object with the following keys: "question" (string), "options" (array of strings, if multiple-choice), "correctAnswer" (string). Ensure the improved response strictly follows the provided JSON schema.`;
+
+    const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            question: { type: Type.STRING, description: 'The improved question text.' },
+            options: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: 'The improved array of possible answers. Omit for short-answer.'
+            },
+            correctAnswer: { type: Type.STRING, description: 'The correct answer, which should remain the same.' },
+        },
+        required: ['question', 'correctAnswer'],
+    };
+
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const result = JSON.parse(jsonText);
+        
+        return {
+            question: result.question,
+            options: result.options || question.options,
+            correctAnswer: result.correctAnswer,
+        };
+
+    } catch (error) {
+        throw getGeminiError(error, 'improving the question');
+    }
+};
+
+export const generateAlternativeOptionsWithAI = async (question: Question): Promise<string[]> => {
+    if (question.type !== 'multiple-choice' || !question.options) {
+        throw new Error("Can only generate options for multiple-choice questions.");
+    }
+    const prompt = `For the multiple-choice question: "${question.question}", the correct answer is "${question.correctAnswer}".
+Generate three plausible but incorrect alternative options (distractors).
+Return the response as a JSON object with a key "options" which is an array of three strings.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        options: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: 'An array of three incorrect options.'
+                        }
+                    },
+                    required: ['options'],
+                },
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const result = JSON.parse(jsonText);
+        // Combine the new distractors with the correct answer
+        const newOptions = [...result.options, question.correctAnswer];
+        // Shuffle the options so the correct answer isn't always last
+        return newOptions.sort(() => Math.random() - 0.5);
+
+    } catch (error) {
+        throw getGeminiError(error, 'generating alternative options');
+    }
+};
+
+
+// --- AI QUESTION FEEDBACK ---
+export const getAIFeedbackForQuestion = async (question: Question): Promise<string> => {
+    let prompt = `For the following quiz question, provide a concise explanation for the correct answer. If it's a multiple-choice question, briefly explain why the other options are incorrect.
+
+Question: "${question.question}"
+`;
+
+    if (question.type === 'multiple-choice' && question.options) {
+        prompt += `Options:\n`;
+        question.options.forEach(opt => {
+            prompt += `- ${opt}\n`;
+        });
+    }
+
+    prompt += `Correct Answer: "${question.correctAnswer}"
+
+Explanation:`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        throw getGeminiError(error, 'generating feedback for a question');
+    }
+};
+
+
+// --- AI TOPIC SUGGESTION ---
+export const generateQuizTopics = async (courseTitle: string, courseDescription: string, courseMaterials: CourseMaterial[]): Promise<string[]> => {
+    const materialTitles = courseMaterials.map(m => m.title).join(', ');
+    const prompt = `Based on the course titled "${courseTitle}", described as "${courseDescription}", with materials like "${materialTitles}", suggest 5-7 concise and relevant topics for a quiz. The topics should be specific and suitable for quiz questions. Return the topics as a JSON array of strings under a "topics" key.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        topics: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                            description: 'A list of suggested quiz topics.'
+                        }
+                    },
+                    required: ['topics'],
+                },
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const result = JSON.parse(jsonText);
+        
+        return result.topics || [];
+
+    } catch (error) {
+        throw getGeminiError(error, 'suggesting quiz topics');
+    }
+};
+
+
+// --- AI ADAPTIVE LEARNING ---
+export const getLearningSuggestion = async (
+    attempt: QuizAttempt, 
+    quiz: Quiz, 
+    course: Course, 
+    allCourses: Course[]
+): Promise<string> => {
+    const percentage = Math.round((attempt.score / attempt.totalPoints) * 100);
+    let prompt: string;
+
+    if (percentage < 60) { // Poor score
+        const incorrectQuestions = quiz.questions.filter(q => 
+            attempt.answers[q.id]?.toLowerCase().trim() !== q.correctAnswer.toLowerCase().trim()
+        );
+
+        if (incorrectQuestions.length === 0 && course.materials.length === 0) {
+             prompt = `A student scored ${percentage}% on the "${quiz.title}" quiz for the course "${course.title}". This is a low score. Provide a short, encouraging learning suggestion to review the course materials related to the quiz topic and retry. Keep the response to 2-3 sentences.`;
+        } else {
+            const incorrectTopics = incorrectQuestions.map(q => q.question).join('\n- ');
+            const availableMaterials = course.materials.length > 0
+                ? course.materials.map(m => `- "${m.title}" (${m.type})`).join('\n')
+                : "No specific materials listed. Suggest a general review of the topic.";
+
+            prompt = `A student scored ${percentage}% on the "${quiz.title}" quiz for the course "${course.title}". 
+They answered the following questions incorrectly:
+- ${incorrectTopics}
+
+The available course materials are:
+${availableMaterials}
+
+Based on the incorrectly answered questions, provide a short, encouraging learning suggestion. If there are materials, recommend one or two *specific* course materials from the list that would be most helpful for the student to review. Be very specific. Keep the response to 2-3 sentences.`;
+        }
+    } else { // Good or okay score
+        const otherCourses = allCourses.filter(c => c.id !== course.id && c.mentorId === course.mentorId); // Suggest other courses by the same instructor
+        
+        let courseSuggestionPrompt = '';
+        if (otherCourses.length > 0) {
+            const availableNextCourses = otherCourses.map(c => `- "${c.title}" (Difficulty: ${c.difficulty})`).join('\n');
+            courseSuggestionPrompt = `
+You could also consider one of these next courses:
+${availableNextCourses}`;
+        }
+
+        prompt = `A student scored ${percentage}% on the "${quiz.title}" quiz for the course "${course.title}". This is a good score. 
+Congratulate them and recommend they start the next topic in the course. ${courseSuggestionPrompt}
+If suggesting another course, suggest one that is of similar or higher difficulty.
+Keep the response short, encouraging, and to 2-3 sentences.`;
+    }
 
     try {
         const response = await ai.models.generateContent({
@@ -475,6 +756,64 @@ export const getLearningSuggestion = async (courseTitle: string, quizTitle: stri
         return response.text;
     } catch (error) {
         console.error("Error generating learning suggestion:", error);
-        return "We're having trouble generating a suggestion right now. Keep up the great work!";
+        if (percentage < 60) {
+            return "Good effort! It looks like there are some areas to review. Take some time to go over the course materials for this topic, and you'll ace it next time!";
+        }
+        return "Excellent work on that quiz! You're making great progress. Keep up the momentum and move on to the next topic.";
     }
+};
+
+
+// --- AI CHATBOT ---
+const toGeminiHistory = (messages: AppChatMessage[]) => {
+  return messages.map(m => ({
+    role: m.role,
+    parts: [{ text: m.text }],
+  }));
+};
+
+export const sendMessageAndGetStream = async (history: AppChatMessage[], message: string) => {
+    const chat: Chat = ai.chats.create({
+        model: 'gemini-flash-lite-latest',
+        history: toGeminiHistory(history),
+    });
+    const result = await chat.sendMessageStream({ message });
+    return result;
+};
+
+export const getChatbotResponse = async (history: AppChatMessage[], message: string, mode: 'balanced' | 'smart' | 'search') => {
+  let modelName = 'gemini-2.5-flash';
+  const config: any = {};
+  
+  if (mode === 'smart') {
+    modelName = 'gemini-2.5-pro';
+    config.thinkingConfig = { thinkingBudget: 32768 };
+  } else if (mode === 'search') {
+    modelName = 'gemini-2.5-flash';
+    config.tools = [{ googleSearch: {} }];
+  }
+  
+  const contents = [...toGeminiHistory(history), { role: 'user', parts: [{ text: message }] }];
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents,
+      config,
+    });
+    
+    const text = response.text;
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources = groundingChunks
+      .filter((chunk: any) => chunk.web && chunk.web.uri && chunk.web.title)
+      .map((chunk: any) => ({
+        uri: chunk.web.uri,
+        title: chunk.web.title,
+      }));
+      
+    return { text, sources };
+  } catch (error) {
+    console.error(`Error with Gemini in ${mode} mode:`, error);
+    throw new Error("Failed to get a response from the AI assistant. The service may be unavailable.");
+  }
 };

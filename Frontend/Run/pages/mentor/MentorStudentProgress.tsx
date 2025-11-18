@@ -20,6 +20,7 @@ interface StudentProgressData {
       performance: {
         status: 'Excellent' | 'Average' | 'Poor' | 'N/A';
         avgScore: number;
+        color: string;
       };
       chartData: { name: string, score: number, date: string }[];
     }
@@ -211,7 +212,7 @@ const MentorStudentProgress: React.FC = () => {
                             attempts: [],
                             progress: 0,
                             lastActivity: 'N/A',
-                            performance: { status: 'N/A', avgScore: NaN },
+                            performance: { status: 'N/A', avgScore: NaN, color: getPerformanceStatus(NaN).color },
                             chartData: []
                         };
                     }
@@ -240,7 +241,7 @@ const MentorStudentProgress: React.FC = () => {
                             const totalScore = courseData.attempts.reduce((sum, att) => sum + (att.score / att.totalPoints * 100), 0);
                             const avgScore = Math.round(totalScore / courseData.attempts.length);
                             const perf = getPerformanceStatus(avgScore);
-                            courseData.performance = { status: perf.status, avgScore };
+                            courseData.performance = { status: perf.status, avgScore, color: perf.color };
 
                             // 4. Chart Data
                             courseData.chartData = courseData.attempts.map(att => ({
@@ -313,9 +314,9 @@ const MentorStudentProgress: React.FC = () => {
     );
 };
 
-const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>;
+const ChevronDownIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>;
 const UsersIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
 

@@ -1,33 +1,51 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './app/guards/auth-guard';
-import { roleGuard } from './app/guards/role-guard';
-import { Login } from './app/pages/auth/login/login';
-import { Register } from './app/pages/auth/register/register';
-import { Student } from './app/pages/dashboard/student/student';
-import { Instructor } from './app/pages/dashboard/instructor/instructor';
-import { Admin } from './app/pages/dashboard/admin/admin';
-import { AiAssistant } from './app/pages/ai-assistant/ai-assistant';
-import { Profile } from './app/pages/profile/profile';
-import { Users } from './app/pages/admin/users/users';
-import { CourseList } from './app/pages/courses/course-list/course-list';
-import { CourseDetail } from './app/pages/courses/course-detail/course-detail';
+import { AuthGuard, RoleGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: Login },
-  { path: 'register', component: Register },
+  // Public routes
+  { path: '', redirectTo: '/login', pathMatch: 'full' },
+  { path: 'login', loadComponent: () => import('./components/login/login').then(m => m.LoginComponent) },
+  { path: 'register', loadComponent: () => import('./components/register/register').then(m => m.RegisterComponent) },
+  { path: 'test', loadComponent: () => import('./components/test-dashboard/test-dashboard.component').then(m => m.TestDashboardComponent) },
 
-  { path: 'dashboard/student', component: Student, canActivate: [authGuard, roleGuard], data: { roles: ['STUDENT'] } },
-  { path: 'dashboard/instructor', component: Instructor, canActivate: [authGuard, roleGuard], data: { roles: ['INSTRUCTOR'] } },
-  { path: 'dashboard/admin', component: Admin, canActivate: [authGuard, roleGuard], data: { roles: ['ADMIN'] } },
+  // Dashboard routes (protected)
+  { path: 'dashboard', canActivate: [AuthGuard], loadComponent: () => import('./components/dashboard/dashboard-redirect.component').then(m => m.DashboardRedirectComponent) },
 
-  { path: 'ai-assistant', component: AiAssistant, canActivate: [authGuard] },
-  { path: 'profile', component: Profile, canActivate: [authGuard] },
+  // Admin Dashboard Routes (nested)
+  { path: 'dashboard/admin', canActivate: [AuthGuard, RoleGuard], data: { expectedRole: 'ADMIN' }, loadComponent: () => import('./components/dashboard/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', loadComponent: () => import('./components/dashboard/admin/overview/admin-overview.component').then(m => m.AdminOverviewComponent) },
+      { path: 'users', loadComponent: () => import('./components/dashboard/admin/users/user-management.component').then(m => m.UserManagementComponent) },
+      { path: 'courses', loadComponent: () => import('./components/dashboard/admin/courses/course-management.component').then(m => m.CourseManagementComponent) },
+      { path: 'analytics', loadComponent: () => import('./components/dashboard/admin/analytics/analytics.component').then(m => m.AnalyticsComponent) },
+      { path: 'settings', loadComponent: () => import('./components/dashboard/admin/settings/admin-settings.component').then(m => m.AdminSettingsComponent) }
+    ]
+  },
 
-  { path: 'admin/users', component: Users, canActivate: [authGuard, roleGuard], data: { roles: ['ADMIN'] } },
+  // Instructor Dashboard Routes (nested)
+  { path: 'dashboard/instructor', canActivate: [AuthGuard, RoleGuard], data: { expectedRole: 'INSTRUCTOR' }, loadComponent: () => import('./components/dashboard/instructor/instructor-dashboard.component').then(m => m.InstructorDashboardComponent),
+    children: [
+      { path: '', redirectTo: 'overview', pathMatch: 'full' },
+      { path: 'overview', loadComponent: () => import('./components/dashboard/instructor/overview/instructor-overview.component').then(m => m.InstructorOverviewComponent) },
+      { path: 'courses', loadComponent: () => import('./components/dashboard/instructor/courses/my-courses.component').then(m => m.MyCoursesComponent) },
+      { path: 'upload', loadComponent: () => import('./components/dashboard/instructor/upload/upload-content.component').then(m => m.UploadContentComponent) },
+      { path: 'students', loadComponent: () => import('./components/dashboard/instructor/students/instructor-students.component').then(m => m.InstructorStudentsComponent) },
+      { path: 'profile', loadComponent: () => import('./components/dashboard/instructor/profile/instructor-profile.component').then(m => m.InstructorProfileComponent) }
+    ]
+  },
 
-  { path: 'courses', component: CourseList, canActivate: [authGuard] },
-  { path: 'courses/:id', component: CourseDetail, canActivate: [authGuard] },
+  // Student Dashboard Routes (nested)
+  { path: 'dashboard/student', canActivate: [AuthGuard, RoleGuard], data: { expectedRole: 'STUDENT' }, loadComponent: () => import('./components/dashboard/student/student-dashboard.component').then(m => m.StudentDashboardComponent),
+    children: [
+      { path: '', redirectTo: 'learning', pathMatch: 'full' },
+      { path: 'learning', loadComponent: () => import('./components/dashboard/student/learning/learning-modules.component').then(m => m.LearningModulesComponent) },
+      { path: 'courses', loadComponent: () => import('./components/dashboard/student/courses/student-courses.component').then(m => m.StudentCoursesComponent) },
+      { path: 'progress', loadComponent: () => import('./components/dashboard/student/progress/progress.component').then(m => m.ProgressComponent) },
+      { path: 'profile', loadComponent: () => import('./components/dashboard/student/profile/student-profile.component').then(m => m.StudentProfileComponent) }
+    ]
+  },
 
-  { path: '**', redirectTo: 'login' }
+  // Fallback route
+  { path: '**', redirectTo: '/login' }
 ];

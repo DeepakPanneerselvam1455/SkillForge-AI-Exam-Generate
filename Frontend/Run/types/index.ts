@@ -27,7 +27,6 @@ export interface Course {
   instructorName: string;
   institutionName: string;
   publishDate: string;
-  courseType: string;
   language: string;
   topics: string[];
   materials: CourseMaterial[];
@@ -51,6 +50,7 @@ export interface Quiz {
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   createdBy: string; // mentorId
   createdAt: string;
+  duration?: number; // Duration in minutes
 }
 
 export interface QuizAttempt {
@@ -73,4 +73,16 @@ export interface QuizAssignment {
   quizId: string;
   studentId: string;
   assignedAt: string;
+  dueDate?: string;
+}
+
+// --- CHATBOT TYPES ---
+export type ChatRole = 'user' | 'model';
+export interface ChatMessage {
+  role: ChatRole;
+  text: string;
+  sources?: {
+    title: string;
+    uri: string;
+  }[];
 }

@@ -1,0 +1,123 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <div class="header-content">
+      <h1>My Progress</h1>
+      <div class="user-info">
+        <span>Welcome, {{ user?.name }}!</span>
+        <button (click)="logout()" class="logout-btn">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="dashboard-nav">
+    <div class="nav-content">
+      <a routerLink="/dashboard/student" class="nav-item">
+        <i class="icon">📚</i>Learning Modules
+      </a>
+      <a routerLink="/dashboard/student/courses" class="nav-item">
+        <i class="icon">🎓</i>My Courses
+      </a>
+      <a routerLink="/dashboard/student/progress" routerLinkActive="active" class="nav-item">
+        <i class="icon">📊</i>Progress
+      </a>
+      <a routerLink="/dashboard/student/profile" class="nav-item">
+        <i class="icon">👤</i>Profile
+      </a>
+    </div>
+  </nav>
+
+  <main class="dashboard-main">
+    <div class="progress-overview" *ngIf="!isLoading">
+      <div class="overview-card overall-progress">
+        <div class="card-header">
+          <h3>Overall Progress</h3>
+          <div class="progress-percentage">{{ progressData?.overallProgress }}%</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progressData?.overallProgress"></div>
+        </div>
+        <p>Keep up the great work! You're making excellent progress.</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📚</div>
+          <div class="stat-content">
+            <h4>{{ progressData?.completedCourses }}/{{ progressData?.totalCourses }}</h4>
+            <p>Courses Completed</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📝</div>
+          <div class="stat-content">
+            <h4>{{ progressData?.completedQuizzes }}/{{ progressData?.totalQuizzes }}</h4>
+            <p>Quizzes Completed</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⭐</div>
+          <div class="stat-content">
+            <h4>{{ progressData?.averageScore }}%</h4>
+            <p>Average Score</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🔥</div>
+          <div class="stat-content">
+            <h4>{{ progressData?.studyStreak }}</h4>
+            <p>Day Study Streak</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-grid" *ngIf="!isLoading">
+      <div class="achievements-section">
+        <h3>🏆 Achievements</h3>
+        <div class="achievements-list">
+          <div *ngFor="let achievement of progressData?.achievements" class="achievement-item">
+            <div class="achievement-icon">{{ achievement.icon }}</div>
+            <div class="achievement-content">
+              <h4>{{ achievement.title }}</h4>
+              <p>{{ achievement.description }}</p>
+              <span class="achievement-date">{{ formatDate(achievement.dateEarned) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="activity-section">
+        <h3>📈 Recent Activity</h3>
+        <div class="activity-list">
+          <div *ngFor="let activity of progressData?.recentActivity" class="activity-item">
+            <div class="activity-icon">{{ activity.icon }}</div>
+            <div class="activity-content">
+              <h4>{{ activity.title }}</h4>
+              <p class="activity-course" *ngIf="activity.course">{{ activity.course }}</p>
+              <span class="activity-time">{{ getTimeAgo(activity.timestamp) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="course-progress-section" *ngIf="!isLoading">
+      <h3>📚 Course Progress</h3>
+      <div class="course-progress-list">
+        <div *ngFor="let course of progressData?.courseProgress" class="course-progress-item">
+          <div class="course-info">
+            <h4>{{ course.courseName }}</h4>
+            <p class="course-category">{{ course.category }}</p>
+            <p class="course-meta">{{ course.completedLessons }}/{{ course.totalLessons }} lessons • Last accessed: {{ formatDate(course.lastAccessed) }}</p>
+          </div>
+          <div class="course-progress-visual">
+            <div class="progress-text">{{ course.progress }}%</div>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="course.progress"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

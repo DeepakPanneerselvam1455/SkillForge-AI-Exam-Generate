@@ -1,23 +1,18 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection, importProvidersFrom } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptorsFromDi, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
-import { ToastrModule } from 'ngx-toastr';
-import { authInterceptor } from './app/interceptors/auth-interceptor';
+import { ReactiveFormsModule } from '@angular/forms';
 
 import { routes } from './app.routes';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideBrowserGlobalErrorListeners(),
-    provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([authInterceptor])),
+    provideHttpClient(withInterceptorsFromDi()),
     provideAnimations(),
-    importProvidersFrom(ToastrModule.forRoot({
-      positionClass: 'toast-bottom-right',
-      timeOut: 3000,
-      closeButton: true
-    }))
+    importProvidersFrom(ReactiveFormsModule),
+    { provide: HTTP_INTERCEPTORS, useClass: AuthInterceptor, multi: true }
   ]
 };
